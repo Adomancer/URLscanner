@@ -1,7 +1,7 @@
 # 🔍 OSINT URL Scanner
 
-OSINT URL Scanner adalah aplikasi berbasis Python + Flask untuk menganalisis daftar URL dari sisi keamanan.  
-Alat ini dirancang untuk kegiatan investigasi dan riset keamanan siber secara _educational purpose only_.
+OSINT URL Scanner is a Python + Flask based application for analyzing a list of URLs for security purposes.
+This tool is designed for cybersecurity investigation and research activities for _educational purpose only_.
 
 ![Badge](https://img.shields.io/badge/Powered%20By-Flask-blue)
 ![Badge](https://img.shields.io/badge/Scan-Shodan%20%2B%20VirusTotal-green)
@@ -9,74 +9,74 @@ Alat ini dirancang untuk kegiatan investigasi dan riset keamanan siber secara _e
 
 ---
 
-## 🚀 Fitur
+## 🚀 Features
 
-- ✅ Input URL satu per satu melalui antarmuka web
-- ✅ Cek HTTP headers dan deteksi header keamanan yang hilang:
-  - `X-Frame-Options`
-  - `Content-Security-Policy`
-  - `Referrer-Policy`
-- ✅ Cek redirect mencurigakan
-- ✅ Lookup IP melalui Shodan API
-- ✅ Reputasi domain dengan VirusTotal API
-- ✅ Export hasil ke format `.csv` dan `.json`
-- ✅ Antarmuka Web dengan Tailwind CSS
-- ✅ Validasi dan sanitasi input URL
-- ✅ Fallback aman saat Shodan/VirusTotal error
+- ✅ Input URLs one by one via web interface
+- ✅ Check HTTP headers and detect missing security headers:
+- `X-Frame-Options`
+- `Content-Security-Policy`
+- `Referrer-Policy`
+- ✅ Check suspicious redirects
+- ✅ IP lookup via Shodan API
+- ✅ Domain reputation with VirusTotal API
+- ✅ Export results to `.csv` and `.json`
+- ✅ Web Interface with Tailwind CSS
+- ✅ URL input validation and sanitization
+- ✅ Safe fallback when Shodan/VirusTotal errors
 
 ---
 
-## 🗂️ Struktur Proyek
+## 🗂️ Project Structure
 
 ```
 url-scanner/
 ├── scanner/
-│   ├── core.py           # Fungsi utama scan_url()
-│   ├── utils.py          # Fungsi bantu: IP resolving, validators
-│   ├── shodan.py         # Integrasi API Shodan
-│   └── virustotal.py     # Integrasi API VirusTotal
+│ ├── core.py # Main scan_url() function
+│ ├── utils.py # Helper functions: IP resolving, validators
+│ ├── shodan.py # Shodan API integration
+│ └── virustotal.py # VirusTotal API integration
 ├── templates/
-│   └── index.html        # Tampilan UI web
+│ └── index.html # Web UI interface
 ├── static/
-│   └── tailwind.css      # Styling dengan Tailwind
-├── outputs/              # (Optional) Hasil export
-├── .env                  # Simpan API key (JANGAN upload ke GitHub)
+│ └── tailwind.css # Styling with Tailwind
+├── outputs/ # (Optional) Export results
+├── .env # Save API key (DO NOT upload to GitHub)
 ├── .gitignore
 ├── requirements.txt
-├── webapp.py             # Main Flask app
+├── webapp.py # Main Flask app
 └── README.md
 ```
 
 ---
 
-## ⚙️ Instalasi & Menjalankan
+## ⚙️ Installing & Running
 
-1. Clone repo ini:
+1. Clone this repo:
 ```bash
 git clone https://github.com/yourusername/osint-url-scanner.git
 cd osint-url-scanner
 ```
 
-2. Buat dan isi `.env`:
+2. Create and populate `.env`:
 ```
 SHODAN_API_KEY=your_shodan_api_key
 VT_API_KEY=your_virustotal_api_key
 SECRET_KEY=your_flask_secret_key
 ```
 
-3. Install dependency:
+3. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-4. Jalankan Flask:
+4. Run Flask:
 ```bash
 python webapp.py
 ```
 
 ---
 
-## 🧪 Contoh URL untuk Testing
+## 🧪 Example URL for Testing
 
 - https://www.google.com/
 - https://example.com/
@@ -84,29 +84,29 @@ python webapp.py
 
 ---
 
-## 📦 Ekspor
+## 📦 Export
 
-- Export hasil scan ke file:
-  - `outputs/report.json`
-  - `outputs/report.csv`
-
----
-
-## 🔒 Catatan Keamanan
-
-- Semua input divalidasi menggunakan `validators`
-- API Key disimpan aman di file `.env`
-- Fallback friendly jika API error (Shodan/VirusTotal)
-- Gunakan hanya untuk tujuan edukatif & riset legal
+- Export scan results to file: 
+- `outputs/report.json` 
+- `outputs/report.csv`
 
 ---
 
-## 📜 Lisensi
+## 🔒 Notes Security
 
-MIT License — bebas digunakan untuk tujuan edukatif.
+- All inputs are validated using `validators`
+- API Key is stored securely in `.env` file
+- Fallback friendly if API error (Shodan/VirusTotal)
+- Use only for educational purposes & legal research
 
 ---
 
-## 📅 Terakhir Diperbarui
+## 📜 License
+
+MIT License — free to use for educational purposes.
+
+---
+
+## 📅 Last Updated
 
 2025-06-26
