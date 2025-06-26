@@ -25,22 +25,17 @@ def scan_url(url):
         "virustotal": None
     }
 
-    # ✅ 1. Validasi format URL
     if not validators.url(url):
         result["error"] = "❌ URL tidak valid. Harus dimulai dengan http:// atau https://"
         return result
 
-    # ✅ 2. Batasi panjang URL
     if len(url) > 2048:
         result["error"] = "❌ URL terlalu panjang. Maksimal 2048 karakter."
         return result
 
-    # ✅ 3. Dapatkan IP dan blokir SSRF (akses ke internal IP)
     try:
         ip = get_ip_from_url(url)
         result["ip"] = ip
-
-        # Cek apakah IP termasuk IP lokal / private
         if ip and (ip.startswith("127.") or ip.startswith("10.") or ip.startswith("192.168.") or ip.startswith("169.254.")):
             result["error"] = "❌ Diblokir: Target berada di jaringan internal (kemungkinan SSRF)"
             return result
@@ -49,14 +44,12 @@ def scan_url(url):
         result["error"] = f"Gagal resolve IP: {str(e)}"
         return result
 
-    # ✅ 4. Kirim permintaan HTTP dengan timeout & tangani error
     try:
         response = requests.get(url, timeout=10, allow_redirects=True)
         result["status_code"] = response.status_code
         result["headers"] = dict(response.headers)
         result["redirects"] = [r.url for r in response.history]
 
-        # Cek security headers
         for header in SECURITY_HEADERS:
             if header not in response.headers:
                 result["missing_headers"].append(header)
@@ -68,11 +61,9 @@ def scan_url(url):
         result["error"] = f"❌ Permintaan gagal: {str(e)}"
         return result
 
-    # ✅ 5. Shodan lookup
     if ip:
         result["shodan_info"] = shodan_lookup(ip)
 
-    # ✅ 6. VirusTotal lookup
     domain = urlparse(url).netloc
     result["virustotal"] = virustotal_check_domain(domain)
 

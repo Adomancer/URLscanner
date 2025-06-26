@@ -1,5 +1,3 @@
-# cli.py
-
 import argparse
 from scanner.core import scan_url
 from scanner.report import save_to_csv, save_to_json
@@ -23,13 +21,11 @@ def main():
         result = scan_url(url)
         results.append(result)
 
-        # Menampilkan ringkasan di terminal
         if "error" in result:
             print(f"[!] Gagal: {result['error']}")
         else:
             print(f"[✓] Status: {result['status_code']}, Hilang: {result['missing_headers']}")
 
-    # Simpan jika diminta
     if args.csv:
         save_to_csv(results, args.csv)
 

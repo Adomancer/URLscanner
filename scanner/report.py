@@ -1,5 +1,3 @@
-# scanner/report.py
-
 import csv
 import json
 

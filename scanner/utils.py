@@ -1,4 +1,3 @@
-# scanner/utils.py
 import requests
 import socket
 import shodan
