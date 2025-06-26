@@ -8,78 +8,100 @@
 </head>
 
 <body class="bg-gray-100 text-gray-800 font-sans">
-    <div class="max-w-3xl mx-auto mt-10 bg-white p-8 rounded shadow-md">
-        <h1 class="text-2xl font-bold mb-4 text-blue-600">🔍 OSINT URL Scanner</h1>
+    <div class="max-w-4xl mx-auto mt-10 bg-white p-8 rounded shadow">
+        <h1 class="text-3xl font-semibold mb-6 text-gray-700">OSINT URL Scanner</h1>
 
+        <!-- Input Form -->
         <form method="POST" class="space-y-4">
             <input name="url" placeholder="https://example.com"
                 class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required>
-            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
+            <button type="submit"
+                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition duration-150">
                 Scan URL
             </button>
         </form>
 
+        <!-- Error Display -->
         {% if result and result.error %}
-        <div class="bg-red-100 text-red-700 p-4 rounded mt-4">
-            ⚠️ {{ result.error }}
+        <div class="bg-red-100 text-red-700 p-4 rounded mt-6">
+            {{ result.error }}
         </div>
         {% endif %}
 
         {% if result and not result.error %}
+        <!-- Results Section -->
         <div class="mt-8">
-            <h2 class="text-xl font-semibold mb-2">🧾 Hasil Scan</h2>
-            <ul class="list-disc pl-6 space-y-1">
-                <li><strong>URL:</strong> {{ result.url }}</li>
-                <li><strong>Status Code:</strong> {{ result.status_code }}</li>
-                <li><strong>Missing Headers:</strong> {{ result.missing_headers }}</li>
-                <li><strong>Redirects:</strong> {{ result.redirects }}</li>
-                <li><strong>IP Address:</strong> {{ result.ip }}</li>
-            </ul>
+            <h2 class="text-xl font-semibold mb-4 text-gray-700">Scan Result</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
 
-            {% if result.shodan_info %}
-            <div class="mt-4">
-                <h3 class="font-bold">🌐 Shodan Info</h3>
-                {% if result.shodan_info.error %}
-                <p class="text-red-600 italic">🔒 {{ result.shodan_info.error }}</p>
-                {% else %}
-                <ul class="list-disc list-inside">
-                    <li><strong>Org:</strong> {{ result.shodan_info.Org }}</li>
-                    <li><strong>OS:</strong> {{ result.shodan_info.OS }}</li>
-                    <li><strong>Open Ports:</strong> {{ result.shodan_info['Open Ports'] }}</li>
-                    <li><strong>Last Update:</strong> {{ result.shodan_info['Last Update'] }}</li>
-                </ul>
-                {% endif %}
+                <!-- Section 1: Basic Info -->
+                <div>
+                    <h3 class="font-medium text-gray-600 mb-2">General</h3>
+                    <ul class="space-y-1 text-sm">
+                        <li><strong>URL:</strong> {{ result.url }}</li>
+                        <li><strong>Status Code:</strong> {{ result.status_code }}</li>
+                        <li><strong>Redirects:</strong> {{ result.redirects }}</li>
+                        <li><strong>IP Address:</strong> {{ result.ip }}</li>
+                    </ul>
+                </div>
+
+                <!-- Section 2: Headers and Shodan -->
+                <div>
+                    <h3 class="font-medium text-gray-600 mb-2">Server & Network</h3>
+                    <ul class="space-y-1 text-sm">
+                        <li><strong>Missing Headers:</strong> {{ result.missing_headers }}</li>
+                    </ul>
+
+                    {% if result.shodan_info %}
+                    <div class="mt-4">
+                        <h4 class="text-sm font-medium text-gray-600">Shodan Info</h4>
+                        {% if result.shodan_info.error %}
+                        <p class="text-red-600 text-sm italic mt-1">{{ result.shodan_info.error }}</p>
+                        {% else %}
+                        <ul class="space-y-1 text-sm mt-1">
+                            <li><strong>Org:</strong> {{ result.shodan_info.Org }}</li>
+                            <li><strong>OS:</strong> {{ result.shodan_info.OS }}</li>
+                            <li><strong>Open Ports:</strong> {{ result.shodan_info['Open Ports'] }}</li>
+                            <li><strong>Last Update:</strong> {{ result.shodan_info['Last Update'] }}</li>
+                        </ul>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Section 3: VirusTotal -->
+                <div>
+                    <h3 class="font-medium text-gray-600 mb-2">VirusTotal</h3>
+                    {% if result.virustotal %}
+                    {% if result.virustotal.error %}
+                    <p class="text-red-500 text-sm">{{ result.virustotal.error }}</p>
+                    {% else %}
+                    <ul class="space-y-1 text-sm">
+                        <li>Harmless: {{ result.virustotal.harmless }}</li>
+                        <li>Suspicious: {{ result.virustotal.suspicious }}</li>
+                        <li>Malicious: {{ result.virustotal.malicious }}</li>
+                        <li>Reputation: {{ result.virustotal.reputation }}</li>
+                        <li><a class="text-blue-600 underline" href="{{ result.virustotal.permalink }}"
+                                target="_blank">View Report</a></li>
+                    </ul>
+                    {% endif %}
+                    {% endif %}
+                </div>
             </div>
-            {% endif %}
 
-            {% if result.virustotal %}
-            <div class="mt-4">
-                <h3 class="font-bold">🛡️ VirusTotal</h3>
-                {% if result.virustotal.error %}
-                <p class="text-red-500">Error: {{ result.virustotal.error }}</p>
-                {% else %}
-                <ul class="list-disc pl-6">
-                    <li>Harmless: {{ result.virustotal.harmless }}</li>
-                    <li>Suspicious: {{ result.virustotal.suspicious }}</li>
-                    <li>Malicious: {{ result.virustotal.malicious }}</li>
-                    <li>Reputation: {{ result.virustotal.reputation }}</li>
-                    <li><a class="text-blue-600 underline" href="{{ result.virustotal.permalink }}"
-                            target="_blank">Lihat di VirusTotal</a></li>
-                </ul>
-                {% endif %}
-            </div>
-            {% endif %}
-
-            <div class="mt-6 space-x-2">
-                <form method="GET" action="/export/csv" class="inline">
-                    <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">
-                        ⬇ Export CSV
+            <!-- Export Buttons -->
+            <div class="mt-6 flex flex-wrap gap-2">
+                <form method="GET" action="/export/csv">
+                    <button type="submit"
+                        class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded transition duration-150">
+                        Export CSV
                     </button>
                 </form>
-                <form method="GET" action="/export/json" class="inline">
-                    <button type="submit" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded">
-                        ⬇ Export JSON
+                <form method="GET" action="/export/json">
+                    <button type="submit"
+                        class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded transition duration-150">
+                        Export JSON
                     </button>
                 </form>
             </div>
