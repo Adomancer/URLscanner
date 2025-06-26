@@ -5,7 +5,6 @@ This tool is designed for cybersecurity investigation and research activities fo
 
 ![Badge](https://img.shields.io/badge/Powered%20By-Flask-blue)
 ![Badge](https://img.shields.io/badge/Scan-Shodan%20%2B%20VirusTotal-green)
-![Badge](https://img.shields.io/badge/UI-TailwindCSS-38B2AC)
 
 ---
 
@@ -20,7 +19,6 @@ This tool is designed for cybersecurity investigation and research activities fo
 - ✅ IP lookup via Shodan API
 - ✅ Domain reputation with VirusTotal API
 - ✅ Export results to `.csv` and `.json`
-- ✅ Web Interface with Tailwind CSS
 - ✅ URL input validation and sanitization
 - ✅ Safe fallback when Shodan/VirusTotal errors
 
@@ -37,8 +35,6 @@ url-scanner/
 │ └── virustotal.py
 ├── templates/
 │ └── index.html
-├── static/
-│ └── tailwind.css
 ├── outputs/ # (Optional) Export results
 ├── .gitignore
 ├── requirements.txt
