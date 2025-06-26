@@ -13,9 +13,9 @@ This tool is designed for cybersecurity investigation and research activities fo
 
 - ✅ Input URLs one by one via web interface
 - ✅ Check HTTP headers and detect missing security headers:
-- `X-Frame-Options`
-- `Content-Security-Policy`
-- `Referrer-Policy`
+    `X-Frame-Options`
+    `Content-Security-Policy`
+    `Referrer-Policy`
 - ✅ Check suspicious redirects
 - ✅ IP lookup via Shodan API
 - ✅ Domain reputation with VirusTotal API
@@ -31,19 +31,18 @@ This tool is designed for cybersecurity investigation and research activities fo
 ```
 url-scanner/
 ├── scanner/
-│ ├── core.py # Main scan_url() function
-│ ├── utils.py # Helper functions: IP resolving, validators
-│ ├── shodan.py # Shodan API integration
-│ └── virustotal.py # VirusTotal API integration
+│ ├── core.py
+│ ├── utils.py
+│ ├── shodan.py
+│ └── virustotal.py
 ├── templates/
-│ └── index.html # Web UI interface
+│ └── index.html
 ├── static/
-│ └── tailwind.css # Styling with Tailwind
+│ └── tailwind.css
 ├── outputs/ # (Optional) Export results
-├── .env # Save API key (DO NOT upload to GitHub)
 ├── .gitignore
 ├── requirements.txt
-├── webapp.py # Main Flask app
+├── webapp.py
 └── README.md
 ```
 
@@ -53,7 +52,7 @@ url-scanner/
 
 1. Clone this repo:
 ```bash
-git clone https://github.com/yourusername/osint-url-scanner.git
+git clone https://github.com/Adomancer/osint-url-scanner.git
 cd osint-url-scanner
 ```
 
