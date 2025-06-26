@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>OSINT URL Scanner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-100 text-gray-800 font-sans">
+    <div class="max-w-3xl mx-auto mt-10 bg-white p-8 rounded shadow-md">
+        <h1 class="text-2xl font-bold mb-4 text-blue-600">🔍 OSINT URL Scanner</h1>
+
+        <form method="POST" class="space-y-4">
+            <input name="url" placeholder="https://example.com"
+                class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required>
+            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
+                Scan URL
+            </button>
+        </form>
+
+        {% if result and result.error %}
+        <div class="bg-red-100 text-red-700 p-4 rounded mt-4">
+            ⚠️ {{ result.error }}
+        </div>
+        {% endif %}
+
+        {% if result and not result.error %}
+        <div class="mt-8">
+            <h2 class="text-xl font-semibold mb-2">🧾 Hasil Scan</h2>
+            <ul class="list-disc pl-6 space-y-1">
+                <li><strong>URL:</strong> {{ result.url }}</li>
+                <li><strong>Status Code:</strong> {{ result.status_code }}</li>
+                <li><strong>Missing Headers:</strong> {{ result.missing_headers }}</li>
+                <li><strong>Redirects:</strong> {{ result.redirects }}</li>
+                <li><strong>IP Address:</strong> {{ result.ip }}</li>
+            </ul>
+
+            {% if result.shodan_info %}
+            <div class="mt-4">
+                <h3 class="font-bold">🌐 Shodan Info</h3>
+                {% if result.shodan_info.error %}
+                <p class="text-red-600 italic">🔒 {{ result.shodan_info.error }}</p>
+                {% else %}
+                <ul class="list-disc list-inside">
+                    <li><strong>Org:</strong> {{ result.shodan_info.Org }}</li>
+                    <li><strong>OS:</strong> {{ result.shodan_info.OS }}</li>
+                    <li><strong>Open Ports:</strong> {{ result.shodan_info['Open Ports'] }}</li>
+                    <li><strong>Last Update:</strong> {{ result.shodan_info['Last Update'] }}</li>
+                </ul>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% if result.virustotal %}
+            <div class="mt-4">
+                <h3 class="font-bold">🛡️ VirusTotal</h3>
+                {% if result.virustotal.error %}
+                <p class="text-red-500">Error: {{ result.virustotal.error }}</p>
+                {% else %}
+                <ul class="list-disc pl-6">
+                    <li>Harmless: {{ result.virustotal.harmless }}</li>
+                    <li>Suspicious: {{ result.virustotal.suspicious }}</li>
+                    <li>Malicious: {{ result.virustotal.malicious }}</li>
+                    <li>Reputation: {{ result.virustotal.reputation }}</li>
+                    <li><a class="text-blue-600 underline" href="{{ result.virustotal.permalink }}"
+                            target="_blank">Lihat di VirusTotal</a></li>
+                </ul>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <div class="mt-6 space-x-2">
+                <form method="GET" action="/export/csv" class="inline">
+                    <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">
+                        ⬇ Export CSV
+                    </button>
+                </form>
+                <form method="GET" action="/export/json" class="inline">
+                    <button type="submit" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded">
+                        ⬇ Export JSON
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</body>
+
+</html>

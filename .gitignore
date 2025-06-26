@@ -1,0 +1,11 @@
+.env
+__pycache__/
+outputs/*.json
+outputs/*.csv
+*.pyc
+*.pyo
+*.pyd
+.env.
+*.sqlite3
+.vscode/
+.idea/
