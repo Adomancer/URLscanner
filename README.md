@@ -48,8 +48,7 @@ url-scanner/
 
 1. Clone this repo:
 ```bash
-git clone https://github.com/Adomancer/osint-url-scanner.git
-cd osint-url-scanner
+git clone https://github.com/Adomancer/URLscanner.git
 ```
 
 2. Create and populate `.env`:
