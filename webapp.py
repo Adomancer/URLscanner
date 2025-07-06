@@ -46,4 +46,5 @@ def export_json():
     return send_file(io.BytesIO(output.getvalue().encode()), download_name="scan_result.json", as_attachment=True)
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, host="0.0.0.0", port=5000)
+
