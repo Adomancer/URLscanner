@@ -1,0 +1,3 @@
+# QR-code (quishing) input: read URLs out of QR-code images.
+opencv-python-headless>=4.8
+numpy>=1.24

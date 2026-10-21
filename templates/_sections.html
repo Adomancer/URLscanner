@@ -1,0 +1,189 @@
+{% set S = r.sections %}
+{% macro kv(rows) -%}
+<table class="kv">
+  {% for k, v in rows if v not in [none, ''] %}<tr><th>{{ k }}</th><td>{{ v }}</td></tr>{% endfor %}
+</table>
+{%- endmacro %}
+
+{% set fl = S.file %}
+{% if fl and fl.show %}
+<h2>File</h2>
+{{ kv([
+  ('Name', fl.name),
+  ('Type', fl.type ~ (' · ' ~ fl.content_type if fl.content_type else '')),
+  ('Size', fl.size ~ ' bytes'),
+  ('Entropy', fl.entropy),
+  ('MD5', fl.md5), ('SHA-1', fl.sha1), ('SHA-256', fl.sha256),
+  ('Known-bad lists', fl.hash_hits | join(', ')),
+  ('YARA', fl.yara | join(', ') if fl.yara else fl.yara_note),
+  ('Name vs. content', fl.mismatch),
+  ('Script', fl.script | join(', ')),
+  ('PDF', fl.pdf_summary),
+  ('Macros', ('VBA' ~ (' · auto-run: ' ~ fl.ole.autoexec | join(', ') if fl.ole.autoexec else '')) if fl.ole and fl.ole.macros else ''),
+  ('Truncated', 'yes, over the analysis limit, so hashes were skipped' if fl.truncated else '')
+]) }}
+{% if fl.pe %}
+{{ kv([
+  ('Machine', fl.pe.machine ~ (' · DLL' if fl.pe.is_dll else '')),
+  ('Compiled', fl.pe.compiled),
+  ('Signed', 'yes' if fl.pe.signed else 'no'),
+  ('Sections', fl.pe.sections | join(', ')),
+  ('Imports of note', fl.pe.suspicious | join('; ')),
+  ('Imported DLLs', fl.pe.dlls | join(', '))
+]) }}
+{% endif %}
+{% if fl.archive %}
+{{ kv([
+  ('Entries', fl.archive.entries),
+  ('Contents', fl.archive.names | join(', ')),
+  ('Macros', ('yes' ~ (' · auto-run: ' ~ fl.archive.autoexec | join(', ') if fl.archive.autoexec else '')) if fl.archive.macros else ''),
+  ('Executables', fl.archive.executables | join(', ')),
+  ('Double extensions', fl.archive.double_extensions | join(', '))
+]) }}
+{% endif %}
+{% endif %}
+
+{% set tls = S.tls %}
+{% if tls and tls.applicable %}
+<h2>TLS</h2>
+{{ kv([
+  ('Subject', tls.subject),
+  ('Issuer', tls.issuer ~ (' · ' ~ tls.issuer_org if tls.issuer_org else '')),
+  ('Valid', tls.not_before[:10] ~ ' → ' ~ tls.not_after[:10] ~ ' (' ~ tls.days_left ~ ' days left)'),
+  ('Trust', 'trusted' if tls.trusted else (tls.verify_error if tls.trusted == false else 'not verified')),
+  ('Key · signature', tls.key ~ ' · ' ~ tls.signature),
+  ('Protocol', tls.protocol ~ ' · ' ~ tls.cipher),
+  ('SHA-256', tls.sha256)
+]) }}
+{% if tls.protocols %}
+<table class="list" style="margin-top:8px"><tbody>
+  {% for name, ok in tls.protocols.items() %}
+  {% set legacy = name in ['TLSv1', 'TLSv1.1'] %}
+  <tr><td class="mono">{{ name }}</td>
+    <td class="{{ 'sev-medium' if ok and legacy }}">{{ 'accepted' if ok else ('refused' if ok == false else 'not tested') }}</td></tr>
+  {% endfor %}
+  {% for name, ok in (tls.weak_ciphers or {}).items() %}
+  <tr><td class="mono">{{ name }} ciphers</td>
+    <td class="{{ 'sev-high' if ok }}">{{ 'accepted' if ok else ('refused' if ok == false else 'not testable on this machine') }}</td></tr>
+  {% endfor %}
+</tbody></table>
+{% endif %}
+{% endif %}
+
+{% set dns = S.dns %}
+{% if dns and dns.records %}
+<h2>DNS</h2>
+{{ kv([
+  ('A', dns.records.A | join(', ')),
+  ('AAAA', dns.records.AAAA | join(', ')),
+  ('CNAME', dns.records.CNAME | join(', ')),
+  ('MX', dns.records.MX | join(', ')),
+  ('NS', dns.records.NS | join(', ')),
+  ('CAA', dns.records.CAA | join(', ')),
+  ('SPF', dns.spf[0] if dns.spf else ''),
+  ('DMARC', dns.dmarc[0] if dns.dmarc else ''),
+  ('DNSSEC', 'signed' if dns.dnssec else '')
+]) }}
+{% endif %}
+
+{% set who = S.whois %}
+{% if who and who.created %}
+<h2>Registration</h2>
+{{ kv([
+  ('Registered', who.created ~ (' (' ~ who.age_days ~ ' days ago)' if who.age_days is not none else '')),
+  ('Expires', who.expires),
+  ('Registrar', who.registrar),
+  ('Privacy', 'redacted' if who.privacy else '')
+]) }}
+{% endif %}
+
+{% set hd = S.headers %}
+{% if hd and hd.rows %}
+<h2>Headers</h2>
+<table class="list"><tbody>
+  {% for row in hd.rows %}
+  <tr>
+    <td class="mono">{{ row.name }}</td>
+    <td class="nowrap {{ 'sev-high' if row.status == 'warn' }} {{ 'sev-medium' if row.status == 'missing' }}">
+      {{ {'ok': 'present', 'missing': 'missing', 'warn': 'weak', 'na': 'n/a', 'optional': 'optional'}.get(row.status, row.status) }}</td>
+    <td class="mut">{{ row.note }}</td>
+  </tr>
+  {% endfor %}
+</tbody></table>
+{% if hd.cookies %}
+<p class="mut" style="font-size:13px;margin-top:10px">Cookies: {% for c in hd.cookies %}{{ c.name }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+{% endif %}
+{% endif %}
+
+{% set rd = S.redirects %}
+{% if rd and rd.chain and rd.chain | length > 1 %}
+<h2>Redirects</h2>
+<table class="list"><tbody>
+  {% for hop in rd.chain %}<tr><td>{{ hop.status }}</td><td class="mono">{{ hop.url | defang }}</td></tr>{% endfor %}
+</tbody></table>
+{% endif %}
+
+{% set wk = S.wellknown %}
+{% if wk and (wk.security_txt or wk.robots) %}
+<h2>security.txt &amp; robots.txt</h2>
+{{ kv([
+  ('security.txt', wk.security_txt.url if wk.security_txt else 'not published'),
+  ('Contact', wk.security_txt.contact | join(', ') if wk.security_txt else ''),
+  ('Expires', wk.security_txt.expires if wk.security_txt else ''),
+  ('Policy', wk.security_txt.policy | join(', ') if wk.security_txt else ''),
+  ('Signed', 'PGP clear-signed' if wk.security_txt and wk.security_txt.signed else ''),
+  ('robots.txt', ((wk.robots.disallow | length) ~ ' disallowed path(s)') if wk.robots else 'none'),
+  ('Sensitive-looking', wk.robots.sensitive | join(', ') if wk.robots else ''),
+  ('Sitemaps', wk.robots.sitemaps | join(', ') if wk.robots else '')
+]) }}
+{% endif %}
+
+{% set osint = S.osint %}
+{% if osint and (osint.tracking_ids or osint.wallets or osint.emails or osint.social or (osint.favicon and osint.favicon.mmh3)) %}
+<h2>OSINT</h2>
+{{ kv([
+  ('Favicon hash', (osint.favicon.mmh3 ~ '  ' ~ osint.favicon.shodan_query) if osint.favicon and osint.favicon.mmh3 else ''),
+  ('Tracking IDs', osint.tracking_ids | map(attribute='id') | join(', ')),
+  ('Wallets', osint.wallets | map(attribute='address') | join(', ')),
+  ('Emails', osint.emails | join(', ')),
+  ('Social', osint.social | map(attribute='url') | join(', '))
+]) }}
+{% endif %}
+
+{% set tech = S.tech %}
+{% if tech and tech.technologies %}
+<h2>Technology</h2>
+<div class="chips">
+  {% for t in tech.technologies %}
+  <span class="chip">{{ t.name }}{% if t.version %} {{ t.version }}{% endif %}{% if t.eol %} · outdated{% endif %}</span>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% set ports = S.ports %}
+{% if ports %}
+<h2>Ports</h2>
+<p class="mut" style="font-size:13px">{{ ports.open | length }} open of {{ ports.scanned | length }} tested on {{ ports.ip }}</p>
+{% if ports.open %}
+<table class="list"><tbody>
+  {% for o in ports.open %}<tr><td class="mono">{{ o.port }}</td><td>{{ o.service }}</td><td class="mono mut">{{ o.banner }}</td></tr>{% endfor %}
+</tbody></table>
+{% endif %}
+{% endif %}
+
+{% set sb = S.sandbox %}
+{% if sb %}
+<h2>Browser</h2>
+{% if sb.skipped %}
+<p class="mut">{{ sb.skipped }}</p>
+{% else %}
+  {% if sb.screenshot %}<img class="shot" src="{{ url_for('screenshot', scan_id=r.id) }}" alt="Rendered page" loading="lazy">{% endif %}
+  {{ kv([
+    ('Rendered URL', sb.final_url | defang),
+    ('Requests', sb.requests ~ ' to ' ~ (sb.domains | length) ~ ' domain(s)'),
+    ('Third-party', sb.third_party | join(', ')),
+    ('Trackers', sb.trackers | join(', ')),
+    ('Blocked (internal)', sb.blocked | join(', '))
+  ]) }}
+{% endif %}
+{% endif %}

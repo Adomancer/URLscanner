@@ -1,0 +1,4 @@
+# Headless-browser sandbox: screenshots, JS-redirect tracking, visual phishing match.
+# After installing, download Chromium once:  python -m playwright install chromium
+playwright>=1.48  # 1.48+ for route_web_socket (WebSocket SSRF guard)
+Pillow>=10.0

@@ -1,0 +1,2 @@
+# Your own trusted registered domains, one per line (e.g. your company's domains).
+# Weak signals on these domains are dampened, just like on well-known sites.

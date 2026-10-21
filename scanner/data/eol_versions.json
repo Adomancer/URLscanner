@@ -1,0 +1,20 @@
+[
+  {"tech": "jQuery", "below": "1.9.0", "severity": "high", "penalty": 10, "note": "jQuery < 1.9 has multiple XSS issues (CVE-2012-6708, CVE-2015-9251, CVE-2020-11022)."},
+  {"tech": "jQuery", "below": "3.5.0", "severity": "medium", "penalty": 6, "note": "jQuery < 3.5.0 is vulnerable to XSS via htmlPrefilter (CVE-2020-11022 / CVE-2020-11023)."},
+  {"tech": "jQuery UI", "below": "1.13.2", "severity": "medium", "penalty": 4, "note": "jQuery UI < 1.13.2 has XSS issues (CVE-2021-41182/41183/41184, CVE-2022-31160)."},
+  {"tech": "Bootstrap", "below": "3.4.1", "severity": "medium", "penalty": 4, "note": "Bootstrap < 3.4.1 has XSS in tooltip/data-template (CVE-2019-8331, CVE-2018-14041)."},
+  {"tech": "Bootstrap", "min": "4.0.0", "below": "4.3.1", "severity": "medium", "penalty": 4, "note": "Bootstrap 4.0–4.3.0 has XSS in tooltip/popover (CVE-2019-8331)."},
+  {"tech": "AngularJS", "below": "999", "severity": "medium", "penalty": 6, "note": "AngularJS (1.x) reached end-of-life in December 2021 and gets no security fixes."},
+  {"tech": "Vue.js", "min": "0.1", "below": "3.0.0", "severity": "low", "penalty": 3, "note": "Vue 2 reached end-of-life on 31 Dec 2023."},
+  {"tech": "Moment.js", "min": "0.1", "below": "2.29.4", "severity": "medium", "penalty": 4, "note": "Moment.js < 2.29.4 has ReDoS / path traversal issues (CVE-2022-31129, CVE-2022-24785)."},
+  {"tech": "Lodash", "min": "0.1", "below": "4.17.21", "severity": "medium", "penalty": 4, "note": "Lodash < 4.17.21 has prototype pollution / command injection (CVE-2020-8203, CVE-2021-23337)."},
+  {"tech": "PHP", "min": "0.1", "below": "8.2", "severity": "high", "penalty": 10, "note": "This PHP branch no longer receives security updates."},
+  {"tech": "WordPress", "min": "0.1", "below": "6.0", "severity": "medium", "penalty": 6, "note": "Very outdated WordPress core; update to the latest release."},
+  {"tech": "Drupal", "min": "0.1", "below": "10.0", "severity": "high", "penalty": 8, "note": "Drupal 7/8/9 are end-of-life (Drupal 7 ended Jan 2025)."},
+  {"tech": "Joomla", "min": "0.1", "below": "4.0", "severity": "high", "penalty": 8, "note": "Joomla 3.x reached end-of-life in August 2023."},
+  {"tech": "Apache", "min": "0.1", "below": "2.4.62", "severity": "medium", "penalty": 5, "note": "Apache httpd older than 2.4.62 misses fixes for several CVEs (e.g. CVE-2024-38476, CVE-2024-40725)."},
+  {"tech": "Nginx", "min": "0.1", "below": "1.24.0", "severity": "low", "penalty": 3, "note": "Nginx older than the 1.24 stable branch misses security fixes."},
+  {"tech": "Microsoft IIS", "min": "0.1", "below": "10.0", "severity": "high", "penalty": 8, "note": "IIS < 10 implies an end-of-life Windows Server (2012 R2 or older)."},
+  {"tech": "OpenSSL", "min": "0.1", "below": "3.0", "severity": "high", "penalty": 8, "note": "OpenSSL 1.x is end-of-life (1.1.1 ended September 2023)."},
+  {"tech": "ASP.NET", "min": "0.1", "below": "4.0", "severity": "medium", "penalty": 5, "note": "Legacy ASP.NET runtime version disclosed."}
+]

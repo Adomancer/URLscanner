@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block body %}
+<form method="POST" action="{{ url_for('scan_submit') }}" enctype="multipart/form-data" id="scan-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="mode" id="mode" value="single">
+
+  <div class="row">
+    <input type="text" name="url" data-panel="single" placeholder="example.com"
+           autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="URL" autofocus>
+    <button type="submit" id="scan-btn">Scan</button>
+  </div>
+
+  <div class="modes">
+    <button type="button" class="on" data-mode="single">URL</button>
+    <button type="button" data-mode="bulk">List</button>
+    <button type="button" data-mode="file">Email, QR or file</button>
+  </div>
+
+  <div data-panel="bulk" class="hidden" style="margin-top:12px">
+    <textarea name="urls" placeholder="One URL per line, up to 50" aria-label="URL list"></textarea>
+  </div>
+  <div data-panel="file" class="hidden" style="margin-top:12px">
+    <input type="file" name="file" accept=".eml,.txt,.png,.jpg,.jpeg,.bmp,.gif,.webp" aria-label="File">
+    <p class="mut" style="font-size:13px;margin:8px 0 0">
+      An .eml file has every link checked. An image is read for a QR code. A .txt file is searched for URLs.
+    </p>
+  </div>
+
+  <fieldset class="opts">
+    <label><input type="checkbox" name="browser" value="1" {{ 'disabled' if not sandbox_available() }}>
+      Browser sandbox{% if not sandbox_available() %} (not installed){% endif %}</label>
+    {% if active_allowed() %}
+    <label><input type="checkbox" name="active" value="1" id="opt-active"> Port scan</label>
+    {% endif %}
+  </fieldset>
+  {% if active_allowed() %}
+  <div class="note warn hidden" id="auth-row">
+    <label><input type="checkbox" name="authorized" value="1" id="opt-auth">
+      I am authorised to test this target</label>
+  </div>
+  {% endif %}
+</form>
+
+<p class="mut" style="font-size:13px;margin-top:40px">
+  Analysis runs on this machine. The URL is not sent to any third party.
+</p>
+{% endblock %}

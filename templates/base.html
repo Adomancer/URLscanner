@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}URL Scanner{% endblock %}</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <a class="name" href="{{ url_for('index') }}">URL Scanner</a>
+      <nav>
+        <a href="{{ url_for('index') }}" class="{{ 'on' if request.endpoint == 'index' }}">Scan</a>
+        <a href="{{ url_for('history') }}" class="{{ 'on' if request.endpoint == 'history' }}">History</a>
+        {% if auth_enabled() and session.get('authed') %}<a href="{{ url_for('logout') }}">Sign out</a>{% endif %}
+      </nav>
+    </header>
+    {% block body %}{% endblock %}
+  </div>
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

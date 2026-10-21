@@ -1,0 +1,17 @@
+<h2>Email</h2>
+<table class="kv">
+  <tr><th>Subject</th><td>{{ eml.subject }}</td></tr>
+  <tr><th>From</th><td class="mono">{{ eml.from }}</td></tr>
+  <tr><th>SPF · DKIM · DMARC</th><td>{{ eml.auth.spf or '?' }} · {{ eml.auth.dkim or '?' }} · {{ eml.auth.dmarc or '?' }}</td></tr>
+</table>
+{% for w in eml.warnings %}<div class="note warn">{{ w }}</div>{% endfor %}
+{% if eml.links %}
+<table class="list" style="margin-top:14px"><thead><tr><th>Shown as</th><th>Links to</th></tr></thead><tbody>
+  {% for l in eml.links %}
+  <tr>
+    <td>{{ l.text or '(no text)' }}</td>
+    <td class="mono">{{ l.url | defang }}{% if l.mismatch %} <span class="sev sev-critical">text ≠ link</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+</tbody></table>
+{% endif %}

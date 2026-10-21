@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% set r = result %}
+{% block title %}{{ r.registered_domain if r else scan.url }} · URL Scanner{% endblock %}
+{% block body %}
+
+{% if scan.status == 'running' or not r %}
+  <p class="mono" style="margin:0 0 16px">{{ scan.url | defang }}</p>
+  <ul class="progress" id="progress" data-scan-id="{{ scan.id }}">
+    {% for name, st in (scan.progress or {}).items() %}
+    <li><span>{{ st.title }}</span><span class="mut">{{ st.note or st.status }}</span></li>
+    {% else %}
+    <li><span class="mut">Starting</span></li>
+    {% endfor %}
+  </ul>
+
+{% elif r.error %}
+  <p class="mono" style="margin:0 0 16px">{{ r.url | defang }}</p>
+  <div class="note danger">{{ r.error }}</div>
+  <p style="margin-top:20px"><a href="{{ url_for('index') }}">New scan</a></p>
+
+{% else %}
+  {% macro finding(f) -%}
+  <div class="finding">
+    <div><span class="sev sev-{{ f.severity }}">{{ f.severity }}</span> <span class="t">{{ f.title }}</span>
+      <span class="ax">· {{ f.axis }}</span></div>
+    {% if f.evidence %}<div class="e">{{ f.evidence }}</div>{% endif %}
+    {% if f.recommendation %}<div class="f">{{ f.recommendation }}</div>{% endif %}
+  </div>
+  {%- endmacro %}
+
+  {% set det = r.detections or {'flagged': 0, 'total': 0, 'engines': []} %}
+  {% set hist = r.history or {'count': 0} %}
+  {% set main = r.findings | rejectattr('severity', 'equalto', 'info') | list %}
+  {% set minor = r.findings | selectattr('severity', 'equalto', 'info') | list %}
+
+  <p class="mono" style="margin:0">{{ r.url | defang }}</p>
+  {% if r.final_url and r.final_url != r.url %}
+  <p class="mono mut" style="margin:2px 0 0;font-size:13px">→ {{ r.final_url | defang }}</p>
+  {% endif %}
+
+  <div class="summary">
+    <div class="stat">
+      <div class="v">{{ r.risk_score }}</div>
+      <div class="l">Threat · {{ r.verdict }}</div>
+      <div class="bar"><i style="width: {{ r.risk_score }}%"></i></div>
+    </div>
+    <div class="stat">
+      <div class="v">{{ r.grade }}</div>
+      <div class="l">Posture{% if r.posture_score is not none %} · {{ r.posture_score }}/100{% endif %}</div>
+    </div>
+    <div class="stat">
+      <div class="v">{{ det.flagged }}<small> / {{ det.total }}</small></div>
+      <div class="l">Engines flagged</div>
+    </div>
+  </div>
+
+  <div class="meta">
+    {% if r.ips %}<span class="mono">{{ r.ips[:2] | join(', ') }}</span>{% endif %}
+    {% if r.status_code %}<span>HTTP {{ r.status_code }}</span>{% endif %}
+    {% if hist.count %}<span>Scanned {{ hist.count }} time{{ 's' if hist.count != 1 }} before, first {{ hist.first | ts }}</span>{% endif %}
+    {% if r.trusted_domain %}<span>well-known domain</span>{% endif %}
+    <span>{{ r.duration_ms }} ms</span>
+  </div>
+  <div class="meta" style="margin-top:8px">
+    <span>Export</span>
+    {% for f in ['json', 'html', 'md', 'csv', 'sarif'] %}<a href="{{ url_for('export', scan_id=r.id, fmt=f) }}">{{ f }}</a>{% endfor %}
+    <a href="{{ url_for('diff_view', url=r.url) }}">history</a>
+  </div>
+
+  <h2>Findings</h2>
+  {% for f in main %}{{ finding(f) }}{% else %}<p class="mut">Nothing above informational.</p>{% endfor %}
+  {% if minor %}
+  <details>
+    <summary>{{ minor | length }} informational</summary>
+    {% for f in minor %}{{ finding(f) }}{% endfor %}
+  </details>
+  {% endif %}
+
+  <h2>Engines</h2>
+  <details>
+    <summary>{{ det.flagged }} of {{ det.total }} flagged</summary>
+    <table class="list" style="margin-top:8px"><tbody>
+      {% for eng in det.engines %}
+      <tr><td>{{ eng.engine }}</td><td class="{{ 'sev-high' if eng.flagged }}">{{ 'flagged' if eng.flagged else 'clean' }}</td></tr>
+      {% endfor %}
+    </tbody></table>
+    <p class="mut" style="font-size:13px;margin:10px 0 0">
+      These are this scanner's own checks plus any feed files you add. They are not third-party vendors.
+    </p>
+  </details>
+
+  {% if eml %}{% include "_eml.html" %}{% endif %}
+  {% include "_sections.html" %}
+
+  <h2>Raw</h2>
+  <details>
+    <summary>JSON</summary>
+    <pre class="raw">{{ r | tojson(indent=2) }}</pre>
+  </details>
+{% endif %}
+{% endblock %}
+{% block scripts %}{% endblock %}

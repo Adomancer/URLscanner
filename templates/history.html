@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}History · URL Scanner{% endblock %}
+{% block body %}
+<form method="GET" class="row" style="margin:0 0 20px">
+  <input type="text" name="q" value="{{ query }}" placeholder="Filter by URL or host" aria-label="Filter">
+</form>
+{% if rows %}
+<table class="list"><thead><tr><th>When</th><th>Risk</th><th>Grade</th><th>URL</th></tr></thead><tbody>
+  {% for row in rows %}
+  <tr>
+    <td class="mut" style="white-space:nowrap">{{ row.created_at | ts }}</td>
+    <td>{{ row.risk_score if row.risk_score is not none else row.status }}</td>
+    <td>{{ row.grade or '' }}</td>
+    <td class="mono"><a href="{{ url_for('scan_result', scan_id=row.id) }}">{{ row.url | defang }}</a>
+      · <a class="mut" href="{{ url_for('diff_view', url=row.url) }}">changes</a></td>
+  </tr>
+  {% endfor %}
+</tbody></table>
+{% else %}
+<p class="mut">No scans yet.</p>
+{% endif %}
+{% endblock %}

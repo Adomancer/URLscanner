@@ -1,0 +1,16 @@
+# Keep secrets, scan history and local clutter out of the image.
+.git
+.gitignore
+.env
+.env.*
+outputs/
+inputs/
+tests/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.vscode/
+.idea/
+*.db
+*.db-wal
+*.db-shm

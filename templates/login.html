@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Sign in · URL Scanner{% endblock %}
+{% block body %}
+<form method="POST" action="{{ url_for('login') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="next" value="{{ next }}">
+  <div class="row">
+    <input type="password" name="token" placeholder="Access token" autocomplete="current-password"
+           aria-label="Access token" autofocus>
+    <button type="submit">Sign in</button>
+  </div>
+  {% if error %}<div class="note danger" style="margin-top:12px">{{ error }}</div>{% endif %}
+</form>
+<p class="mut" style="font-size:13px;margin-top:40px">
+  This scanner is protected by an access token (SCANNER_ACCESS_TOKEN).
+</p>
+{% endblock %}

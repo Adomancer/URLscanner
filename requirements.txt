@@ -1,5 +1,16 @@
-Flask
-requests
-validators
-shodan
-python-dotenv
+# Core — pure-Python, no third-party API keys needed.
+Flask>=3.0,<4.0
+requests>=2.31,<3.0
+urllib3>=2.0,<3.0
+dnspython>=2.4,<3.0
+cryptography>=42.0
+beautifulsoup4>=4.12,<5.0
+lxml>=5.0
+tldextract>=5.1,<6.0
+idna>=3.6
+python-dotenv>=1.0
+gunicorn>=21.2 ; platform_system != "Windows"
+
+# Optional extras (install only if you want these features):
+#   Browser sandbox + visual phishing match:  pip install -r requirements-browser.txt
+#   QR-code (quishing) input:                  pip install -r requirements-qr.txt

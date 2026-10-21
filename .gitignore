@@ -1,11 +1,24 @@
 .env
+.env.*
 __pycache__/
-outputs/*.json
-outputs/*.csv
 *.pyc
 *.pyo
 *.pyd
-.env.
-*.sqlite3
+.pytest_cache/
 .vscode/
 .idea/
+
+# Scan artifacts
+outputs/
+*.sqlite3
+*.db
+*.db-wal
+*.db-shm
+
+# User-supplied threat feeds and captured references (keep the folders, not the data)
+scanner/data/blocklists/*.txt
+scanner/data/brand_refs/*.json
+scanner/data/favicon_hashes.json
+scanner/data/hashlists/*.txt
+scanner/data/yara/*.yar
+!scanner/data/blocklists/README.md
