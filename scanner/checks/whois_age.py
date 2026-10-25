@@ -119,7 +119,7 @@ def lookup(domain):
     return info
 
 
-@check("whois", "Domain registration")
+@check("whois", "Domain registration", passive=True)
 def run(ctx):
     s = Section()
     domain = ctx.registered_domain
@@ -134,6 +134,9 @@ def run(ctx):
         return s
 
     cached = storage.whois_cache_get(domain)
+    if cached is None and ctx.options.get("network") == "none":
+        s.data.update({"domain": domain, "error": "not in the local WHOIS cache (network disabled)"})
+        return s
     if cached is None:
         try:
             info = lookup(domain)

@@ -9,6 +9,8 @@ Examples:
   python cli.py history            # recent scans
   python cli.py diff https://site.test
   python cli.py add-brand-ref https://www.paypal.com/signin PayPal
+  python cli.py gmail scan --days 7          # score your Gmail; links are never opened
+  python cli.py gmail watch                  # keep checking new mail
 """
 import argparse
 import os
@@ -140,11 +142,58 @@ def cmd_scan(args):
     return 0
 
 
+def _mail_verdict_color(v):
+    return {"Dangerous": "\033[91m", "Suspicious": "\033[93m", "Low risk": "\033[94m",
+            "No signals found": "\033[92m"}.get(v, "\033[90m")
+
+
+def print_email(r, verbose=False):
+    """One analysed e-mail (scanner.mail result; URLs in it are already redacted)."""
+    vc = _mail_verdict_color(r.get("verdict"))
+    print()
+    print(f"  {_color('●', vc)} {r.get('subject') or '(no subject)'}")
+    print(f"    From:    {r.get('from') or '-'}")
+    if r.get("error"):
+        print(f"    {_color('Error: ' + r['error'], SEV_COLOR['high'])}")
+        return
+    print(f"    Verdict: {_color(str(r['verdict']) + ' — ' + str(r['risk_score']) + '/100', vc)}"
+          + ("  (allow-listed sender: never labelled)" if r.get("allowlisted") else ""))
+    a = r.get("auth_info") or {}
+    how = "verified by Gmail" if a.get("verified") else "unverified"
+    print(f"    Auth:    SPF={a.get('spf') or '?'} DKIM={a.get('dkim') or '?'} DMARC={a.get('dmarc') or '?'} ({how})")
+    shown = r["findings"] if verbose else [f for f in r["findings"] if f["weight"] >= 0.1][:8]
+    for f in shown:
+        print(f"      {_color('•', SEV_COLOR.get(f['severity'], ''))} [{f['severity']}] {f['title']}")
+        if verbose and f.get("evidence"):
+            print(f"          {f['evidence']}")
+    if r.get("links"):
+        print(f"    Links ({len(r['links'])}; opened: {sum(1 for l in r['links'] if l['mode'] == 'deep')}):")
+        for l in r["links"] if verbose else r["links"][:10]:
+            risk = "-" if l.get("risk_score") is None else l["risk_score"]
+            tags = [t for t, on in (("from QR", l["source"] == "qr"), ("in attachment", l["source"] == "attachment"),
+                                    ("one-time link?", l.get("token_like"))) if on]
+            print(f"      {l['n']:>2}. [{l['mode']:<7}] {str(l['verdict']):<16} {risk:>3}  {defang(l['url'])}"
+                  + (f"  ({', '.join(tags)})" if tags else ""))
+    for n in r.get("notes") or []:
+        print(f"    {_color('note: ' + n, SEV_COLOR['info'])}")
+
+
 def cmd_extract(args):
     path = args.file
     data = open(path, "rb").read()
     urls = []
-    if path.lower().endswith(".eml") or data[:5] in (b"From ", b"Retur", b"Date:", b"Deliv"):
+    is_eml = path.lower().endswith(".eml") or data[:5] in (b"From ", b"Retur", b"Date:", b"Deliv")
+    if is_eml and args.scan:
+        # whole-message analysis; links are only looked at passively (never opened)
+        from scanner.mail.pipeline import persist, scan_message
+        r = scan_message(data, trusted_source=False, network=args.network)
+        print_email(r, args.verbose)
+        if not r.get("error"):
+            persist(r)
+        print("\nLinks were analysed passively (not opened). Auth results in an uploaded file cannot be "
+              "verified.", file=sys.stderr)
+        return 0
+    if is_eml:
         info = parse_eml(data)
         print(f"Subject: {info['subject']}")
         print(f"From:    {info['from']}")
@@ -176,6 +225,163 @@ def cmd_extract(args):
         print(f"\nScanning {len(urls)} extracted URL(s)…", file=sys.stderr)
         for r in scan_many(urls, workers=args.workers):
             print_result(r, args.verbose)
+    return 0
+
+
+def _gmail_source():
+    from scanner.mail.imap_source import ImapSource
+    return ImapSource()
+
+
+def _gmail_errors(fn):
+    def wrapper(args):
+        from scanner.mail.imap_source import ImapError
+        try:
+            return fn(args)
+        except ImapError as e:
+            print(f"Gmail: {e}", file=sys.stderr)
+            return 2
+    return wrapper
+
+
+@_gmail_errors
+def cmd_gmail_test(args):
+    with _gmail_source() as src:
+        folders = src.folders()
+        _, uids = src.search(src.resolve_folder("inbox"), since_days=7)
+        print(f"Logged in as {src.address} (IMAP, read-only).")
+        for key in ("inbox", "spam", "all"):
+            print(f"  {key:<6} {folders.get(key) or _color('not visible over IMAP', SEV_COLOR['high'])}")
+        print(f"  {len(uids)} message(s) in the inbox from the last 7 days.")
+    return 0
+
+
+def _print_summary(summary):
+    print(f"\n{summary['folder']}: {summary['found']} found, {summary['scanned']} analysed, "
+          f"{summary['skipped']} skipped, {summary['errors']} failed.")
+    for v in ("Dangerous", "Suspicious", "Low risk", "No signals found"):
+        if summary["verdicts"].get(v):
+            print(f"  {_color(f'{v:<17}', _mail_verdict_color(v))} {summary['verdicts'][v]}")
+    if summary["label_errors"]:
+        print(_color(f"  {summary['label_errors']} label(s) could not be applied (see `gmail list`).",
+                     SEV_COLOR["high"]))
+
+
+@_gmail_errors
+def cmd_gmail_scan(args):
+    from scanner.mail.runner import scan_inbox
+
+    def show(r, item):
+        if args.all or r.get("verdict") in ("Suspicious", "Dangerous"):
+            print_email(r, args.verbose)
+            print(f"    id: {item.msgid}")
+
+    with _gmail_source() as src:
+        print(f"Scanning {args.folder} of {src.address} (last {args.days} day(s)); links are analysed "
+              f"passively, never opened.", file=sys.stderr)
+        summary = scan_inbox(src, folder=args.folder, days=args.days, unread=args.unread, limit=args.limit,
+                             rescan=args.rescan, label=not args.no_label, network=args.network, on_result=show)
+    _print_summary(summary)
+    return 1 if summary["verdicts"].get("Dangerous") else 0
+
+
+@_gmail_errors
+def cmd_gmail_deep(args):
+    from scanner.mail.runner import TokenLinkRefused, deep_scan
+    print(_color("Deep scan opens the selected links from THIS computer: the sites will see your IP address and "
+                 "the full link, including any token in it. A VPN hides your IP, nothing more.",
+                 SEV_COLOR["high"]), file=sys.stderr)
+    links = set(args.url) if args.url else None
+    with _gmail_source() as src:
+        try:
+            r = deep_scan(src, args.msgid, links=links, allow_token_links=args.yes_token_link,
+                          label=not args.no_label, network=args.network)
+        except TokenLinkRefused as e:
+            print("Refusing: these links look like one-time links (password reset, login, unsubscribe...) and "
+                  "opening them may use up the real token:", file=sys.stderr)
+            for l in e.links:
+                print(f"  {l['n']:>2}. {defang(l['url'])}", file=sys.stderr)
+            print("Choose other links with --url N, or confirm with --yes-token-link.", file=sys.stderr)
+            return 2
+    print_email(r, args.verbose)
+    return 0
+
+
+@_gmail_errors
+def cmd_gmail_watch(args):
+    import logging
+    from scanner.mail.runner import watch
+    logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)s %(message)s")
+
+    def show(r, item):
+        if r.get("verdict") in ("Suspicious", "Dangerous") or args.verbose:
+            print_email(r)
+            print(f"    id: {item.msgid}")
+
+    def err(e):
+        print(f"Gmail: {e} (retrying)", file=sys.stderr)
+
+    print(f"Watching {args.folder} every {args.interval}s (Ctrl+C to stop). Links are never opened.",
+          file=sys.stderr)
+    try:
+        watch(_gmail_source, args.folder, interval=args.interval, label=not args.no_label, network=args.network,
+              on_result=show, on_error=err)
+    except RuntimeError as e:
+        print(str(e), file=sys.stderr)
+        return 2
+    return 0
+
+
+def cmd_gmail_list(args):
+    import datetime as dt
+    rows = storage.list_emails(limit=args.limit, verdict=args.verdict or "")
+    if not rows:
+        print("No e-mails scanned yet.")
+        return 0
+    print(f"{'RECEIVED':<17} {'RISK':>4} {'VERDICT':<17} {'LABEL':<22} FROM / SUBJECT")
+    for r in rows:
+        when = dt.datetime.fromtimestamp(r["received_at"] or r["scanned_at"]).strftime("%Y-%m-%d %H:%M")
+        v = _color(f"{r['verdict'] or '-':<17}", _mail_verdict_color(r["verdict"]))
+        label = r["label_applied"] or (_color("error", SEV_COLOR["high"]) if r["label_error"] else "-")
+        print(f"{when:<17} {r['risk_score'] if r['risk_score'] is not None else '-':>4} {v} {label:<22} "
+              f"{r['from_addr']} / {r['subject'][:60]}")
+        if args.verbose:
+            print(f"{'':<17} id {r['msgid']}" + (f"  label error: {r['label_error']}" if r["label_error"] else ""))
+    return 0
+
+
+def cmd_gmail_eval(args):
+    """Detection quality on a hand-labelled set: <dir>/phishing/*.eml and <dir>/legit/*.eml."""
+    from scanner.mail.pipeline import scan_message
+    stats = {"tp": 0, "fn": 0, "fp": 0, "tn": 0}
+    wrong = []
+    for truth in ("phishing", "legit"):
+        folder = os.path.join(args.dir, truth)
+        if not os.path.isdir(folder):
+            print(f"Missing folder: {folder}", file=sys.stderr)
+            return 2
+        for name in sorted(os.listdir(folder)):
+            if not name.lower().endswith(".eml"):
+                continue
+            with open(os.path.join(folder, name), "rb") as f:
+                r = scan_message(f.read(), trusted_source=args.trust_auth, network=args.network)
+            flagged = r.get("verdict") in ("Suspicious", "Dangerous")
+            key = ("tp" if flagged else "fn") if truth == "phishing" else ("fp" if flagged else "tn")
+            stats[key] += 1
+            if key in ("fn", "fp"):
+                wrong.append((key, name, r.get("verdict"), r.get("risk_score"),
+                              ", ".join(x["title"] for x in (r.get("reasons") or [])[:2])))
+    tp, fn, fp, tn = stats["tp"], stats["fn"], stats["fp"], stats["tn"]
+    print(f"phishing: {tp + fn} (caught {tp}, missed {fn})   legit: {fp + tn} (false alarms {fp})")
+    if tp + fp:
+        print(f"precision {tp / (tp + fp):.0%}", end="   ")
+    if tp + fn:
+        print(f"recall {tp / (tp + fn):.0%}", end="   ")
+    if fp + tn:
+        print(f"false-positive rate {fp / (fp + tn):.0%}", end="")
+    print()
+    for key, name, verdict, risk, why in wrong:
+        print(f"  {'MISSED' if key == 'fn' else 'FALSE ALARM':<11} {name}: {verdict} {risk} {why}")
     return 0
 
 
@@ -257,7 +463,10 @@ def build_parser():
 
     e = sub.add_parser("extract", help="extract URLs from text, .eml e-mail, or a QR-code image")
     e.add_argument("file", help="path to a .txt / .eml / image file")
-    e.add_argument("--scan", action="store_true", help="scan the extracted URLs")
+    e.add_argument("--scan", action="store_true",
+                   help="scan the extracted URLs (for an .eml: score the whole message; links are not opened)")
+    e.add_argument("--network", choices=("dns", "none"), default=config.MAIL_NETWORK,
+                   help="for .eml: 'none' makes no network connection at all (default: %(default)s)")
     e.add_argument("--workers", type=int, default=6)
     e.add_argument("-v", "--verbose", action="store_true")
     e.set_defaults(func=cmd_extract)
@@ -275,6 +484,56 @@ def build_parser():
     b.add_argument("url")
     b.add_argument("brand")
     b.set_defaults(func=cmd_add_brand_ref)
+
+    g = sub.add_parser("gmail", help="scan your Gmail (IMAP + App Password, read-only; links are never opened)")
+    gsub = g.add_subparsers(dest="gmail_command", required=True)
+    net_help = "'none' = no network connection at all during analysis (default: %(default)s)"
+
+    gt = gsub.add_parser("test", help="check the login and show which folders are visible")
+    gt.set_defaults(func=cmd_gmail_test)
+
+    gs = gsub.add_parser("scan", help="analyse recent messages and label suspicious ones")
+    gs.add_argument("--days", type=int, default=7)
+    gs.add_argument("--folder", default="inbox", help="inbox, spam, all, or a Gmail label name")
+    gs.add_argument("--unread", action="store_true", help="only unread messages (they stay unread)")
+    gs.add_argument("--limit", type=int, default=200, help="at most this many messages (newest first)")
+    gs.add_argument("--rescan", action="store_true", help="also re-analyse messages scanned before")
+    gs.add_argument("--no-label", action="store_true", help="read-only: do not add URLscanner/* labels")
+    gs.add_argument("--network", choices=("dns", "none"), default=config.MAIL_NETWORK, help=net_help)
+    gs.add_argument("--all", action="store_true", help="print every message, not only flagged ones")
+    gs.add_argument("-v", "--verbose", action="store_true")
+    gs.set_defaults(func=cmd_gmail_scan)
+
+    gd = gsub.add_parser("deep", help="open the links of ONE message (only when you ask; sites see your IP)")
+    gd.add_argument("msgid", help="message id shown by `gmail scan` / `gmail list -v`")
+    gd.add_argument("--url", type=int, action="append", metavar="N", help="only link number N (repeatable)")
+    gd.add_argument("--yes-token-link", action="store_true",
+                    help="also open links that look like one-time links (may use up a real token)")
+    gd.add_argument("--no-label", action="store_true")
+    gd.add_argument("--network", choices=("dns", "none"), default=config.MAIL_NETWORK, help=net_help)
+    gd.add_argument("-v", "--verbose", action="store_true")
+    gd.set_defaults(func=cmd_gmail_deep)
+
+    gw = gsub.add_parser("watch", help="keep checking for new mail; Windows toast for dangerous messages")
+    gw.add_argument("--folder", default="inbox")
+    gw.add_argument("--interval", type=int, default=300, help="seconds between checks (default: %(default)s)")
+    gw.add_argument("--no-label", action="store_true")
+    gw.add_argument("--network", choices=("dns", "none"), default=config.MAIL_NETWORK, help=net_help)
+    gw.add_argument("-v", "--verbose", action="store_true")
+    gw.set_defaults(func=cmd_gmail_watch)
+
+    gl = gsub.add_parser("list", help="list scanned e-mails from the local database")
+    gl.add_argument("--verdict", choices=("Dangerous", "Suspicious", "Low risk", "No signals found"))
+    gl.add_argument("--limit", type=int, default=50)
+    gl.add_argument("-v", "--verbose", action="store_true", help="also show message ids and label errors")
+    gl.set_defaults(func=cmd_gmail_list)
+
+    ge = gsub.add_parser("eval", help="measure detection on hand-labelled .eml files (phishing/ and legit/)")
+    ge.add_argument("dir", nargs="?", default=os.path.join(config.OUTPUT_DIR, "labeled"))
+    ge.add_argument("--trust-auth", action="store_true",
+                    help="treat the files' Gmail auth headers as verified (your own exports from Gmail)")
+    ge.add_argument("--network", choices=("dns", "none"), default="none", help=net_help)
+    ge.set_defaults(func=cmd_gmail_eval)
     return p
 
 

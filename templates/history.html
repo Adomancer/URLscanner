@@ -1,22 +1,35 @@
 {% extends "base.html" %}
+{% from "_ui.html" import badge, riskbar %}
 {% block title %}History · URL Scanner{% endblock %}
 {% block body %}
-<form method="GET" class="row" style="margin:0 0 20px">
-  <input type="text" name="q" value="{{ query }}" placeholder="Filter by URL or host" aria-label="Filter">
-</form>
-{% if rows %}
-<table class="list"><thead><tr><th>When</th><th>Risk</th><th>Grade</th><th>URL</th></tr></thead><tbody>
-  {% for row in rows %}
-  <tr>
-    <td class="mut" style="white-space:nowrap">{{ row.created_at | ts }}</td>
-    <td>{{ row.risk_score if row.risk_score is not none else row.status }}</td>
-    <td>{{ row.grade or '' }}</td>
-    <td class="mono"><a href="{{ url_for('scan_result', scan_id=row.id) }}">{{ row.url | defang }}</a>
-      · <a class="mut" href="{{ url_for('diff_view', url=row.url) }}">changes</a></td>
-  </tr>
-  {% endfor %}
-</tbody></table>
-{% else %}
-<p class="mut">No scans yet.</p>
-{% endif %}
+<div class="page-head">
+  <div><div class="eyebrow">History</div><h1>Past scans</h1>
+    <p>Every completed scan is kept locally so you can compare a site over time.</p></div>
+  <form method="GET" style="min-width:min(100%, 340px)">
+    <div class="search"><input type="search" name="q" value="{{ query }}" placeholder="Filter by URL or host" aria-label="Filter"></div>
+  </form>
+</div>
+<div class="card flush">
+  {% if rows %}
+  <div class="table-wrap"><table class="hover">
+    <thead><tr><th>Target</th><th>Verdict</th><th class="hide-sm">Risk</th><th class="hide-sm">Grade</th><th class="hide-sm">When</th><th></th></tr></thead>
+    <tbody>
+    {% for row in rows %}
+    <tr>
+      <td><a class="row-link" href="{{ url_for('scan_result', scan_id=row.id) }}"><span class="cell-title mono">{{ row.url | defang }}</span></a>
+        {% if row.options and row.options.passive %}<span class="tag">passive</span>{% endif %}</td>
+      <td>{% if row.verdict %}{{ badge(row.verdict) }}{% else %}<span class="mut small">{{ row.status }}</span>{% endif %}</td>
+      <td class="hide-sm">{{ riskbar(row.risk_score, row.verdict) }}</td>
+      <td class="hide-sm">{{ row.grade or '' }}</td>
+      <td class="nowrap mut small hide-sm">{{ row.created_at | ts }}</td>
+      <td class="nowrap"><a class="small" href="{{ url_for('diff_view', url=row.url) }}" title="Compare with earlier scans">diff</a></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}
+  <div class="empty"><p>{{ 'Nothing matches that filter.' if query else 'No scans yet.' }}</p>
+    <a class="btn" href="{{ url_for('index') }}">Scan something</a></div>
+  {% endif %}
+</div>
 {% endblock %}

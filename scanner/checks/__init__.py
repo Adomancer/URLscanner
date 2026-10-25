@@ -4,6 +4,9 @@ A check is a function `fn(ctx) -> Section` registered with @check(...). Checks r
   stage 1 -- independent (HTTP fetch, TLS, DNS, WHOIS, lexical, blocklists)
   stage 2 -- needs stage-1 data (headers, redirects, OSINT, tech, takeover, active, sandbox)
   stage 3 -- post-processing that can use the sandbox's rendered DOM (content analysis)
+
+A check marked passive=True never contacts the target host itself, so it may run on links from
+e-mails without telling the sender that the message was opened (see core.scan_url(passive=True)).
 """
 import threading
 from dataclasses import dataclass, field
@@ -24,14 +27,15 @@ class Check:
     requires: str = ""  # "" | "resolved" | "http"
     active: bool = False
     browser: bool = False
+    passive: bool = False
 
 
 REGISTRY = []
 
 
-def check(name, title, *, stage=1, requires="", active=False, browser=False):
+def check(name, title, *, stage=1, requires="", active=False, browser=False, passive=False):
     def deco(fn):
-        REGISTRY.append(Check(name, title, fn, stage, requires, active, browser))
+        REGISTRY.append(Check(name, title, fn, stage, requires, active, browser, passive))
         return fn
     return deco
 
@@ -57,7 +61,8 @@ class ScanContext:
 
     @property
     def trusted(self):
-        return self.registered_domain in data.trusted_domains()
+        # platforms where anyone can publish (Google Forms, OneDrive shares, ...) never earn trust
+        return self.registered_domain in data.trusted_domains() and not data.abused_platform(self.host)
 
     @property
     def final_url(self):

@@ -1,0 +1,3 @@
+# Senders you trust for the Gmail scanner, one per line: a full address (boss@company.com) or a
+# registered domain (company.com). Mail from these senders is never labelled -- but ONLY when Gmail
+# itself reports DMARC pass for a matching From domain, so a forged From line can never use this list.

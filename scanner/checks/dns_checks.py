@@ -47,11 +47,14 @@ def nxdomain(name):
         return False
 
 
-@check("dns", "DNS & e-mail security")
+@check("dns", "DNS & e-mail security", passive=True)
 def run(ctx):
     s = Section()
     r = _resolver()
     host, domain = ctx.host, ctx.registered_domain
+    if ctx.options.get("passive"):
+        # a per-recipient subdomain (abc123.track.example) would tell its nameserver the mail was read
+        host = domain
     try:
         ipaddress.ip_address(host.strip("[]"))
         s.data["applicable"] = False

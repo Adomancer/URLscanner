@@ -131,7 +131,7 @@ def brand_matches(label, registered, subdomain=""):
             break
 
 
-@check("lexical", "URL structure")
+@check("lexical", "URL structure", passive=True)
 def run(ctx):
     s = Section()
     url, host = ctx.url, ctx.host

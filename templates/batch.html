@@ -1,19 +1,41 @@
 {% extends "base.html" %}
-{% block title %}Batch · URL Scanner{% endblock %}
+{% from "_ui.html" import badge, riskbar %}
+{% block title %}{{ 'E-mail' if eml else 'Batch' }} · URL Scanner{% endblock %}
 {% block body %}
-<p class="mut" style="font-size:13px;margin:0 0 16px">{{ rows | length }} URL(s). This page updates until each scan finishes.</p>
-<table class="list" id="batch" data-ids="{{ ids | join(',') }}">
-  <thead><tr><th>Risk</th><th>Grade</th><th>Verdict</th><th>URL</th></tr></thead>
-  <tbody>
-    {% for row in rows %}
-    <tr data-id="{{ row.id }}">
-      <td class="risk">{% if row.risk_score is not none %}{{ row.risk_score }}{% else %}<span class="mut">{{ row.status }}</span>{% endif %}</td>
-      <td class="grade">{{ row.grade or '' }}</td>
-      <td class="verdict">{{ row.verdict or '' }}</td>
-      <td class="mono"><a href="{{ url_for('scan_result', scan_id=row.id) }}">{{ row.url | defang }}</a></td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-{% if eml %}{% include "_eml.html" %}{% endif %}
+<div class="crumbs"><a href="{{ url_for('index') }}">New scan</a>
+  {% if msgid and mail_enabled() %}· <a href="{{ url_for('mail_detail', msgid=msgid) }}">open in Mail</a>{% endif %}</div>
+
+{% if eml %}
+  {% include "_eml.html" %}
+  {% if rows %}
+  <details class="panel" style="margin-top:18px"><summary>Stored link scans <span class="mut">{{ rows | length }}</span></summary>
+    <div class="body table-wrap"><table class="hover" id="batch" data-ids="{{ ids | join(',') }}">
+      <thead><tr><th>Risk</th><th>Verdict</th><th>URL</th></tr></thead>
+      <tbody>{% for row in rows %}
+        <tr data-id="{{ row.id }}" data-done="1">
+          <td class="risk">{{ riskbar(row.risk_score, row.verdict) }}</td>
+          <td class="verdict">{{ badge(row.verdict) if row.verdict else row.status }}</td>
+          <td><a class="row-link mono" href="{{ url_for('scan_result', scan_id=row.id) }}">{{ row.url | defang }}</a></td>
+        </tr>{% endfor %}</tbody>
+    </table></div></details>
+  {% endif %}
+{% else %}
+  <div class="page-head"><div><div class="eyebrow">Batch</div><h1>{{ rows | length }} URLs</h1>
+    <p>Each row fills in as its scan finishes.</p></div></div>
+  <div class="card flush"><div class="table-wrap">
+    <table class="hover" id="batch" data-ids="{{ ids | join(',') }}">
+      <thead><tr><th>Risk</th><th>Verdict</th><th class="hide-sm">Grade</th><th>URL</th></tr></thead>
+      <tbody>
+        {% for row in rows %}
+        <tr data-id="{{ row.id }}" {% if row.status != 'running' %}data-done="1"{% endif %}>
+          <td class="risk">{% if row.risk_score is not none %}{{ riskbar(row.risk_score, row.verdict) }}{% else %}<span class="spinner"></span>{% endif %}</td>
+          <td class="verdict">{% if row.verdict %}{{ badge(row.verdict) }}{% else %}<span class="mut small pulse">{{ row.status }}</span>{% endif %}</td>
+          <td class="grade hide-sm">{{ row.grade or '' }}</td>
+          <td><a class="row-link mono" href="{{ url_for('scan_result', scan_id=row.id) }}">{{ row.url | defang }}</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div></div>
+{% endif %}
 {% endblock %}

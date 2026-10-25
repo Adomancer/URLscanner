@@ -1,23 +1,41 @@
-<!doctype html>
+{% from "_ui.html" import icon %}<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#000000">
   <title>{% block title %}URL Scanner{% endblock %}</title>
   <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  {% block head %}{% endblock %}
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <a class="name" href="{{ url_for('index') }}">URL Scanner</a>
-      <nav>
-        <a href="{{ url_for('index') }}" class="{{ 'on' if request.endpoint == 'index' }}">Scan</a>
-        <a href="{{ url_for('history') }}" class="{{ 'on' if request.endpoint == 'history' }}">History</a>
-        {% if auth_enabled() and session.get('authed') %}<a href="{{ url_for('logout') }}">Sign out</a>{% endif %}
+  {% set ep = request.endpoint or '' %}
+  <div class="app">
+    <aside class="side">
+      <a class="brand" href="{{ url_for('index') }}">
+        <span class="logo">{{ icon('shield') }}</span>
+        <span><b>URL Scanner</b></span>
+      </a>
+      <nav class="nav" aria-label="Main">
+        <a href="{{ url_for('index') }}" class="{{ 'on' if ep in ('index', 'scan_result', 'batch_view') }}">{{ icon('search') }}<span class="lbl">Scan</span></a>
+        <a href="{{ url_for('history') }}" class="{{ 'on' if ep in ('history', 'diff_view') }}">{{ icon('clock') }}<span class="lbl">History</span></a>
+        {% if mail_enabled() %}<a href="{{ url_for('mail_list') }}" class="{{ 'on' if ep.startswith('mail_') }}">{{ icon('mail') }}<span class="lbl">Mail</span></a>{% endif %}
+        <div class="sep"></div>
+        <a href="{{ url_for('guide') }}" class="{{ 'on' if ep == 'guide' }}">{{ icon('book') }}<span class="lbl">Guide</span></a>
+        {% if auth_enabled() and session.get('authed') %}<a href="{{ url_for('logout') }}">{{ icon('logout') }}<span class="lbl">Sign out</span></a>{% endif %}
       </nav>
-    </header>
-    {% block body %}{% endblock %}
+      <div class="side-foot">
+        <div class="privacy-pill">Runs on this machine.<br>Nothing is sent to scanning services.</div>
+        <span class="mut small hide-sm">v{{ version }}</span>
+      </div>
+    </aside>
+    <main class="main">
+      <div class="container">
+        {% block body %}{% endblock %}
+      </div>
+    </main>
   </div>
   <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>

@@ -1,17 +1,154 @@
-<h2>Email</h2>
-<table class="kv">
-  <tr><th>Subject</th><td>{{ eml.subject }}</td></tr>
-  <tr><th>From</th><td class="mono">{{ eml.from }}</td></tr>
-  <tr><th>SPF · DKIM · DMARC</th><td>{{ eml.auth.spf or '?' }} · {{ eml.auth.dkim or '?' }} · {{ eml.auth.dmarc or '?' }}</td></tr>
-</table>
-{% for w in eml.warnings %}<div class="note warn">{{ w }}</div>{% endfor %}
-{% if eml.links %}
-<table class="list" style="margin-top:14px"><thead><tr><th>Shown as</th><th>Links to</th></tr></thead><tbody>
-  {% for l in eml.links %}
-  <tr>
-    <td>{{ l.text or '(no text)' }}</td>
-    <td class="mono">{{ l.url | defang }}{% if l.mismatch %} <span class="sev sev-critical">text ≠ link</span>{% endif %}</td>
-  </tr>
-  {% endfor %}
-</tbody></table>
-{% endif %}
+{% from "_ui.html" import badge, sev, gauge, riskbar, copy %}
+{# One analysed e-mail. `eml` is a scanner.mail result (already redacted) or, for uploads made with older
+   versions, a plain summary without a verdict. Every field is optional: nothing here may crash. #}
+{% set auth = eml.auth_info or eml.auth or {} %}
+{% set sender = eml.sender or {} %}
+{% set links = eml.links or [] %}
+{% set atts = (eml.attachments or []) | rejectattr('inline') | list %}
+{% set inline_qr = (eml.attachments or []) | selectattr('inline') | selectattr('qr') | list %}
+{% macro authchip(name, value) -%}
+{% set t = {'pass': 'ok', 'fail': 'crit', 'softfail': 'med', 'permerror': 'high', 'temperror': 'med', 'neutral': 'info', 'none': 'info'}.get(value or '', 'info') %}
+<span class="badge t-{{ t }}">{{ name }} {{ value or 'unknown' }}</span>
+{%- endmacro %}
+
+<div class="card">
+  <div class="verdict-panel">
+    {% if eml.verdict and eml.risk_score is not none %}{{ gauge(eml.risk_score, eml.verdict) }}{% endif %}
+    <div class="what">
+      <div class="eyebrow">{{ 'From Gmail' if eml.trusted_source else 'E-mail' }}</div>
+      <h1>{{ eml.subject or '(no subject)' }}</h1>
+      <div class="target" style="margin-top:6px">{{ eml.from or '—' }}</div>
+      <div class="verdict-line">
+        {% if eml.verdict %}{{ badge(eml.verdict) }}{% endif %}
+        {% if label_applied %}<span class="tag">Gmail label: {{ label_applied }}</span>{% endif %}
+        {% if eml.allowlisted %}<span class="tag">allow-listed sender</span>{% endif %}
+        {% if eml.deep %}<span class="tag">links were opened (deep scan)</span>
+        {% elif eml.verdict %}<span class="tag">links not opened</span>{% endif %}
+      </div>
+      <div class="meta" style="margin-top:12px">
+        {% if eml.date %}<span>{{ eml.date }}</span>{% endif %}
+        {% if links %}<span>{{ links | length }} link{{ 's' if links | length != 1 }}</span>{% endif %}
+        {% if atts %}<span>{{ atts | length }} attachment{{ 's' if atts | length != 1 }}</span>{% endif %}
+        {% if eml.duration_ms %}<span>{{ eml.duration_ms }} ms</span>{% endif %}
+      </div>
+    </div>
+  </div>
+  {% if eml.error %}<div class="note danger"><div>{{ eml.error }}</div></div>{% endif %}
+  {% for n in eml.notes or [] %}<div class="note info"><div>{{ n }}</div></div>{% endfor %}
+</div>
+
+<div class="grid side-r" style="margin-top:18px">
+  <div class="stack">
+    {% if eml.findings is defined %}
+    <div class="card">
+      <div class="card-head"><h2>Why</h2><span class="mut small">every point of the score</span></div>
+      <div class="findings">
+        {% for f in eml.findings if f.weight >= 0.02 %}
+        <div class="finding t-{{ f.severity | tone }}">
+          <div class="t">{{ sev(f.severity) }} <span>{{ f.title }}</span><span class="w">+{{ '%.2f' | format(f.weight) }}</span></div>
+          {% if f.evidence %}<div class="e">{{ f.evidence }}</div>{% endif %}
+        </div>
+        {% else %}
+        <div class="note good"><div>No warning signs found. That is not a guarantee: stay careful with unexpected requests for money or codes.</div></div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if links %}
+    <div class="card flush">
+      <div class="card-head"><h2>Links</h2><span class="mut small">shown defanged, private tokens masked</span></div>
+      <div class="table-wrap"><table style="margin-top:12px">
+        <thead><tr>{% if eml.verdict %}<th>#</th><th>Risk</th>{% endif %}<th>Links to</th><th class="hide-sm">Shown as</th></tr></thead>
+        <tbody>
+        {% for l in links %}
+        <tr>
+          {% if eml.verdict %}<td class="mut num">{{ l.n }}</td>
+          <td>{{ riskbar(l.risk_score, l.verdict) }}<div class="mut small nowrap">{{ l.verdict }}</div></td>{% endif %}
+          <td><span class="mono">{{ l.url | defang }}</span>
+            <div class="chips" style="margin-top:5px">
+              {% if l.mismatch %}<span class="badge sq t-crit">text ≠ link</span>{% endif %}
+              {% if l.source == 'qr' %}<span class="badge sq t-med">QR code</span>
+              {% elif l.source == 'attachment' %}<span class="badge sq t-med">in attachment</span>
+              {% elif l.source == 'unwrapped' %}<span class="badge sq t-info">unwrapped redirect</span>{% endif %}
+              {% if l.token_like %}<span class="badge sq t-info">one-time link?</span>{% endif %}
+              {% if l.mode == 'deep' %}<span class="badge sq t-high">opened</span>{% endif %}
+              {% if l.trusted %}<span class="badge sq t-ok">well-known</span>{% endif %}
+            </div>
+            {% if l.reasons %}<div class="mut small" style="margin-top:4px">{{ l.reasons | map(attribute='title') | join(' · ') }}</div>{% endif %}
+            {% if l.error %}<div class="mut small">{{ l.error }}</div>{% endif %}</td>
+          <td class="hide-sm small">{{ l.text or '—' }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+    </div>
+    {% endif %}
+
+    {% if atts or inline_qr %}
+    <div class="card flush">
+      <div class="card-head"><h2>Attachments</h2><span class="mut small">analysed statically, never opened</span></div>
+      <div class="table-wrap"><table style="margin-top:12px">
+        <thead><tr><th>File</th><th class="hide-sm">Type</th><th class="hide-sm">Size</th><th>Findings</th></tr></thead>
+        <tbody>
+        {% for a in atts + inline_qr %}
+        <tr>
+          <td><span class="cell-title mono">{{ a.filename or ('inline image' if a.inline else '(unnamed)') }}</span>
+            {% if a.sha256 %}<span class="cell-sub">sha256 {{ a.sha256[:16] }}… {{ copy(a.sha256, 'Copy SHA-256') }}</span>{% endif %}</td>
+          <td class="hide-sm small">{{ a.kind or a.type }}</td>
+          <td class="hide-sm small nowrap">{{ ((a.size or 0) / 1024) | round(1) }} KB</td>
+          <td class="small">
+            {% if a.skipped or a.error %}<span class="mut">{{ a.skipped or a.error }}</span>{% endif %}
+            {% for fl in a.flags or [] %}<div>{{ sev(fl.severity) }} {{ fl.title }}</div>{% endfor %}
+            {% if a.html_password %}<div>{{ sev('critical') }} contains a login form</div>{% endif %}
+            {% if a.qr %}<div>{{ sev('medium') }} QR code: <span class="mono">{{ a.qr | join(', ') | truncate(80) }}</span></div>{% endif %}
+            {% if a.risky_type %}<div>{{ sev('high') }} risky file type</div>{% endif %}
+            {% if not (a.flags or a.skipped or a.error or a.html_password or a.qr or a.risky_type) %}<span class="mut">nothing notable</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="stack">
+    <div class="card">
+      <h3>Sender</h3>
+      <table class="kv"><tbody>
+        <tr><th>Address</th><td class="mono">{{ eml.from_address or sender.address or '—' }}</td></tr>
+        {% if sender.domain %}<tr><th>Domain</th><td class="mono">{{ sender.domain }}{% if sender.freemail %} <span class="tag">free mail</span>{% endif %}</td></tr>{% endif %}
+        {% if eml.brand_claim %}<tr><th>Claims to be</th><td>{{ eml.brand_claim }}</td></tr>{% endif %}
+        {% if eml.reply_to %}<tr><th>Reply-To</th><td class="mono">{{ eml.reply_to }}</td></tr>{% endif %}
+        {% if eml.return_path %}<tr><th>Return-Path</th><td class="mono">{{ eml.return_path }}</td></tr>{% endif %}
+        {% if eml.seen_before is defined and eml.trusted_source %}<tr><th>Mailed you before</th>
+          <td>{{ {True: 'yes', False: 'no, first message'}.get(eml.seen_before, 'unknown') }}</td></tr>{% endif %}
+      </tbody></table>
+    </div>
+    <div class="card">
+      <h3>Authentication</h3>
+      <div class="chips">{{ authchip('SPF', auth.spf) }} {{ authchip('DKIM', auth.dkim) }} {{ authchip('DMARC', auth.dmarc) }}</div>
+      {% if auth.verified %}
+      <div class="note good"><div>Reported by Gmail itself{% if sender.verified_aligned %}, and DMARC matches the visible sender{% endif %}.</div></div>
+      {% elif eml.auth_info is defined %}
+      <div class="note"><div>{{ 'Gmail did not vouch for these results.' if eml.trusted_source else 'Taken from the file, so not verified: anyone can write these headers.' }}</div></div>
+      {% endif %}
+    </div>
+    {% if eml.scam_categories %}
+    <div class="card">
+      <h3>Scam wording</h3>
+      {% for cat, phrases in eml.scam_categories.items() %}
+      <div style="margin-bottom:8px"><span class="badge sq t-high">{{ cat }}</span>
+        <div class="mut small" style="margin-top:4px">“{{ phrases | join('”, “') }}”</div></div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if eml.warnings %}
+    <div class="card">
+      <h3>Header notes</h3>
+      {% for w in eml.warnings %}<div class="small" style="padding:6px 0;border-bottom:1px solid var(--line)">{{ w }}</div>{% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>

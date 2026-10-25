@@ -40,10 +40,18 @@ def _flat_row(r):
     }
 
 
+def csv_safe(value):
+    """Neutralise spreadsheet formulas: a cell starting with = + - @ (or tab/CR) is evaluated by Excel
+    and LibreOffice, and scanned input (URLs, e-mail subjects) is attacker-controlled."""
+    if isinstance(value, str) and value[:1] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + value
+    return value
+
+
 def to_csv(results):
     if isinstance(results, dict):
         results = [results]
-    rows = [_flat_row(r) for r in results]
+    rows = [{k: csv_safe(v) for k, v in _flat_row(r).items()} for r in results]
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=list(rows[0].keys()) if rows else ["url"])
     writer.writeheader()

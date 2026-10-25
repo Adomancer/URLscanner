@@ -16,9 +16,9 @@ from flask import (Flask, abort, g, jsonify, redirect, render_template, request,
                    send_file, send_from_directory, session, url_for)
 
 import config
-from scanner import report, storage
+from scanner import __version__, report, storage
 from scanner.core import new_scan_id, scan_url
-from scanner.extract import decode_qr, extract_urls, parse_eml, qr_available
+from scanner.extract import decode_qr, extract_urls, qr_available
 from scanner.checks.sandbox import available as sandbox_available
 
 app = Flask(__name__)
@@ -50,6 +50,19 @@ app.jinja_env.globals["sandbox_available"] = sandbox_available
 app.jinja_env.globals["qr_available"] = qr_available
 app.jinja_env.globals["active_allowed"] = lambda: config.WEB_ACTIVE
 app.jinja_env.globals["auth_enabled"] = lambda: bool(config.ACCESS_TOKEN)
+
+
+app.jinja_env.globals["version"] = __version__
+
+# Colour family for every verdict the scanner produces (URL scans and e-mails).
+_TONES = {"Malicious": "crit", "Likely malicious": "high", "Suspicious": "med", "Clean": "ok", "Unverified": "info",
+          "Dangerous": "crit", "Low risk": "low", "No signals found": "ok", "Error": "info",
+          "critical": "crit", "high": "high", "medium": "med", "low": "low", "info": "info"}
+
+
+@app.template_filter("tone")
+def _tone(value):
+    return _TONES.get(value or "", "info")
 
 
 @app.template_filter("defang")
@@ -152,7 +165,25 @@ def parse_options(src):
 
 @app.route("/")
 def index():
-    return render_template("scan.html")
+    try:
+        recent, stats = storage.list_scans(limit=6), storage.scan_stats()
+    except Exception:  # a fresh or locked database must never break the home page
+        recent, stats = [], {}
+    return render_template("scan.html", recent=recent, stats=stats)
+
+
+@app.route("/guide")
+def guide():
+    return render_template("guide.html", network=config.MAIL_NETWORK)
+
+
+def _scan_eml(raw):
+    """An uploaded e-mail is scored as a whole; its links are analysed passively (never opened)."""
+    from scanner.mail.pipeline import persist, scan_message
+    r = scan_message(raw, trusted_source=False, network=config.MAIL_NETWORK, budget=25)
+    if r.get("error"):
+        abort(400, f"Could not read this e-mail: {r['error']}")
+    return persist(r)
 
 
 @app.route("/scan", methods=["POST"])
@@ -163,17 +194,13 @@ def scan_submit():
     options = parse_options(request.form)
     mode = request.form.get("mode", "single")
     urls = []
-    meta = {}
 
     if mode == "file" and "file" in request.files and request.files["file"].filename:
         f = request.files["file"]
         raw = f.read(8 * 1024 * 1024)
         name = f.filename.lower()
-        if name.endswith(".eml") or raw[:5] in (b"From ", b"Retur", b"Date:"):
-            info = parse_eml(raw)
-            urls = [l["url"] for l in info["links"]]
-            meta["eml"] = {"subject": info["subject"], "from": info["from"], "warnings": info["warnings"],
-                           "auth": info["auth"], "links": info["links"]}
+        if name.endswith(".eml") or raw[:5] in (b"From ", b"Retur", b"Date:", b"Deliv", b"Recei", b"MIME-"):
+            return redirect(url_for("batch_view", b=_scan_eml(raw)))
         elif name.endswith((".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp")):
             if not qr_available():
                 abort(400, "QR decoding is not installed on the server.")
@@ -192,13 +219,13 @@ def scan_submit():
             urls = [u]
 
     urls = list(dict.fromkeys(urls))[:50]
-    if not urls and not meta:
+    if not urls:
         abort(400, "No URL to scan.")
-    if len(urls) == 1 and not meta:
+    if len(urls) == 1:
         return redirect(url_for("scan_result", scan_id=start_scan(urls[0], options)))
-    # Several URLs, or an e-mail: group them so the batch page can show them (and the e-mail) together.
+    # Several URLs: group them so the batch page can follow them together.
     batch_id = new_scan_id()
-    storage.create_batch(batch_id, meta)
+    storage.create_batch(batch_id, {})
     for u in urls:
         start_scan(u, options, batch_id)
     return redirect(url_for("batch_view", b=batch_id))
@@ -221,8 +248,9 @@ def batch_view():
         rows = [r for r in (storage.get_scan(i) for i in request.args.getlist("id")) if r]
     if not batch and not rows:
         abort(404)
-    eml = (batch or {}).get("meta", {}).get("eml")
-    return render_template("batch.html", rows=rows, ids=[r["id"] for r in rows], eml=eml)
+    meta = (batch or {}).get("meta", {})
+    return render_template("batch.html", rows=rows, ids=[r["id"] for r in rows], eml=meta.get("eml"),
+                           source=meta.get("source", ""), msgid=meta.get("msgid", ""))
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -260,6 +288,150 @@ def diff_view():
     rows = storage.latest_scans_for(url, 2)
     d = report.diff(rows[1]["result"], rows[0]["result"]) if len(rows) >= 2 else None
     return render_template("diff.html", url=url, rows=rows, d=d)
+
+
+# --- Gmail scanner ------------------------------------------------------------------------
+
+MAIL_JOB = "gmail"  # one Gmail job at a time, tracked in SQLite so every gunicorn worker agrees
+_LOCAL_HOSTS = {"localhost", "127.0.0.1", "[::1]", "::1"}
+
+
+def mail_page(fn):
+    """Pages that show your mailbox: need an access token and a local (or listed) Host header."""
+    @wraps(fn)
+    def wrapper(*a, **k):
+        if not config.ACCESS_TOKEN:
+            abort(403, "The Gmail pages are off until SCANNER_ACCESS_TOKEN is set (they show your mail).")
+        host = request.host.rsplit(":", 1)[0].lower() if not request.host.startswith("[") \
+            else request.host.split("]")[0] + "]"
+        if host not in _LOCAL_HOSTS and host not in config.ALLOWED_HOSTS:
+            abort(403, "Unexpected Host header. Add it to SCANNER_ALLOWED_HOSTS if this is intended.")
+        return fn(*a, **k)
+    return wrapper
+
+
+def mail_configured():
+    return bool(config.GMAIL_ADDRESS and config.GMAIL_APP_PASSWORD)
+
+
+def start_mail_job(what, fn):
+    """Run one Gmail job at a time in the background pool. Returns False if one is already running
+    (in this or any other worker process)."""
+    if not storage.claim_job(MAIL_JOB, what):
+        return False
+
+    def job():
+        from scanner.mail.imap_source import ImapError
+        from scanner.mail.runner import TokenLinkRefused
+        message, error = "", ""
+        try:
+            message = fn() or "done"
+        except TokenLinkRefused as e:
+            error = (f"{len(e.links)} selected link(s) look like one-time links; tick the "
+                     "one-time-link box to open them anyway.")
+        except ImapError as e:
+            error = str(e)
+        except Exception as e:
+            error = f"internal error ({type(e).__name__})"
+        finally:
+            storage.finish_job(MAIL_JOB, message, error)
+    _pool.submit(job)
+    return True
+
+
+app.jinja_env.globals["mail_enabled"] = lambda: bool(config.ACCESS_TOKEN)
+
+
+@app.route("/mail")
+@mail_page
+def mail_list():
+    verdict = request.args.get("verdict", "")
+    q = request.args.get("q", "").strip()[:200]
+    rows = storage.list_emails(limit=300, verdict=verdict, query=q)
+    return render_template("mail.html", rows=rows, verdict=verdict, q=q, job=storage.get_job(MAIL_JOB),
+                           stats=storage.mail_stats(), configured=mail_configured(),
+                           address=config.GMAIL_ADDRESS, network=config.MAIL_NETWORK)
+
+
+@app.route("/api/mail/job")
+@mail_page
+def api_mail_job():
+    return jsonify(storage.get_job(MAIL_JOB))
+
+
+@app.route("/mail/export.csv")
+@mail_page
+def mail_export():
+    """The scanned-mail list as CSV (already redacted data: no bodies, no URL tokens)."""
+    import csv
+    import datetime as dt
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["received", "scanned", "from", "subject", "risk", "verdict", "label", "label_error", "message_id"])
+    for r in storage.list_emails(limit=100000, verdict=request.args.get("verdict", "")):
+        def iso(t):
+            return dt.datetime.fromtimestamp(t).isoformat(timespec="seconds") if t else ""
+        w.writerow([report.csv_safe(c) for c in (
+            iso(r["received_at"]), iso(r["scanned_at"]), r["from_addr"], r["subject"], r["risk_score"],
+            r["verdict"], r["label_applied"], r["label_error"], r["msgid"])])
+    return send_file(io.BytesIO(buf.getvalue().encode("utf-8-sig")), mimetype="text/csv", as_attachment=True,
+                     download_name="urlscanner-mail.csv")
+
+
+@app.route("/mail/scan", methods=["POST"])
+@mail_page
+def mail_scan():
+    check_csrf()
+    if not mail_configured():
+        abort(400, "Set GMAIL_ADDRESS and GMAIL_APP_PASSWORD in .env first.")
+    try:
+        days = max(1, min(int(request.form.get("days", 1)), 90))
+    except ValueError:
+        days = 1
+    label = request.form.get("label") in ("1", "on")
+
+    def run():
+        from scanner.mail.imap_source import ImapSource
+        from scanner.mail.runner import scan_inbox
+        with ImapSource() as src:
+            s = scan_inbox(src, days=days, label=label)
+        found = ", ".join(f"{n} {v}" for v, n in s["verdicts"].items()) or "nothing new"
+        return f"Scanned {s['scanned']} message(s) from the last {days} day(s): {found}."
+    if not start_mail_job("scan", run):
+        abort(429, "A Gmail job is already running.")
+    return redirect(url_for("mail_list"))
+
+
+@app.route("/mail/<msgid>")
+@mail_page
+def mail_detail(msgid):
+    row = storage.get_email(msgid)
+    if not row:
+        abort(404)
+    return render_template("mail_detail.html", row=row, eml=row["result"], job=storage.get_job(MAIL_JOB),
+                           configured=mail_configured(), label_applied=row.get("label_applied", ""))
+
+
+@app.route("/mail/<msgid>/deep", methods=["POST"])
+@mail_page
+def mail_deep(msgid):
+    check_csrf()
+    if not storage.get_email(msgid):
+        abort(404)
+    if request.form.get("understand") != "on":
+        abort(400, "Tick the box confirming that the sites will see your IP address.")
+    links = {int(n) for n in request.form.getlist("link") if n.isdigit()} or None
+    allow_tokens = request.form.get("token_links") == "on"
+
+    def run():
+        from scanner.mail.imap_source import ImapSource
+        from scanner.mail.runner import deep_scan
+        with ImapSource() as src:
+            r = deep_scan(src, msgid, links=links, allow_token_links=allow_tokens)
+        return f"Deep scan finished: {r['verdict']} ({r['risk_score']}/100)."
+    if not start_mail_job("deep", run):
+        abort(429, "A Gmail job is already running.")
+    return redirect(url_for("mail_detail", msgid=msgid))
 
 
 @app.route("/scan/<scan_id>/export/<fmt>")
@@ -314,6 +486,7 @@ def api_scan_status(scan_id):
 
 @app.errorhandler(400)
 @app.errorhandler(401)
+@app.errorhandler(403)
 @app.errorhandler(404)
 @app.errorhandler(429)
 def handle_error(e):
@@ -334,4 +507,6 @@ def security_headers(resp):
 
 
 if __name__ == "__main__":
+    # local runs pick up edited templates without a restart (gunicorn keeps the faster cached default)
+    app.config["TEMPLATES_AUTO_RELOAD"] = True
     app.run(debug=config.FLASK_DEBUG, host="127.0.0.1", port=5000)

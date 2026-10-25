@@ -1,17 +1,18 @@
 {% extends "base.html" %}
 {% block title %}Sign in · URL Scanner{% endblock %}
 {% block body %}
-<form method="POST" action="{{ url_for('login') }}">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <input type="hidden" name="next" value="{{ next }}">
-  <div class="row">
-    <input type="password" name="token" placeholder="Access token" autocomplete="current-password"
-           aria-label="Access token" autofocus>
-    <button type="submit">Sign in</button>
+<div class="login-wrap">
+  <div class="card login-card">
+    <h1 style="font-size:21px">Sign in</h1>
+    <p class="mut">This scanner is protected by an access token.</p>
+    <form method="POST" action="{{ url_for('login') }}" style="margin-top:18px">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="next" value="{{ next }}">
+      <input type="password" name="token" placeholder="Access token" autocomplete="current-password" aria-label="Access token" autofocus>
+      <button type="submit" class="lg" style="width:100%;margin-top:12px">Sign in</button>
+      {% if error %}<div class="note danger" style="text-align:left"><div>{{ error }}</div></div>{% endif %}
+    </form>
+    <p class="mut small" style="margin:18px 0 0">The token is the value of <code>SCANNER_ACCESS_TOKEN</code>.</p>
   </div>
-  {% if error %}<div class="note danger" style="margin-top:12px">{{ error }}</div>{% endif %}
-</form>
-<p class="mut" style="font-size:13px;margin-top:40px">
-  This scanner is protected by an access token (SCANNER_ACCESS_TOKEN).
-</p>
+</div>
 {% endblock %}

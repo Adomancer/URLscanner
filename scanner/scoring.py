@@ -56,7 +56,8 @@ def consensus(checks_state, findings, sections):
     return {"flagged": sum(1 for e in engines if e["flagged"]), "total": len(engines), "engines": engines}
 
 
-def score(findings, trusted=False, fetched=True):
+def score(findings, trusted=False, fetched=True, passive=False):
+    """passive -- the target was never contacted, so a low score means "nothing found yet", not "clean"."""
     prod = 1.0
     for f in findings:
         if f.weight <= 0:
@@ -67,6 +68,8 @@ def score(findings, trusted=False, fetched=True):
         prod *= 1 - w
     risk = round(100 * (1 - prod))
     verdict = next(v for t, v in VERDICTS if risk >= t)
+    if passive and verdict == "Clean":
+        verdict = "Unverified"
 
     if fetched:
         posture = max(0, 100 - sum(f.penalty for f in findings))

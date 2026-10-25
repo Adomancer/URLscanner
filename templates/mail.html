@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% from "_ui.html" import badge, riskbar %}
+{% block title %}Mail · URL Scanner{% endblock %}
+{% block head %}{% if job.running %}<noscript><meta http-equiv="refresh" content="5"></noscript>{% endif %}{% endblock %}
+{% block body %}
+{% set bv = stats.by_verdict %}
+<div class="page-head">
+  <div><div class="eyebrow">Mail</div><h1>Inbox scanner</h1>
+    <p>{% if configured %}{{ address }} · {% endif %}read-only: nothing is marked as read, moved or deleted.</p></div>
+  {% if stats.total %}<a class="btn ghost" href="{{ url_for('mail_export', verdict=verdict) }}">Export CSV</a>{% endif %}
+</div>
+
+{% if not configured %}
+<div class="card">
+  <h2>Connect Gmail</h2>
+  <ol class="steps">
+    <li><div>Turn on 2-Step Verification, then create an <b>App Password</b> at <span class="mono">myaccount.google.com/apppasswords</span>.</div></li>
+    <li><div>Add to <span class="mono">.env</span>: <span class="mono">GMAIL_ADDRESS=you@gmail.com</span> and <span class="mono">GMAIL_APP_PASSWORD=…</span></div></li>
+    <li><div>Restart the scanner. Check the connection with <span class="mono">python cli.py gmail test</span>.</div></li>
+  </ol>
+  <p class="mut small" style="margin:14px 0 0">An App Password grants full mailbox access: keep it only in .env and revoke it when unused. <a href="{{ url_for('guide') }}#gmail">Read the guide</a>.</p>
+</div>
+{% else %}
+<div class="card">
+  <form method="POST" action="{{ url_for('mail_scan') }}" class="spread">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="row">
+      <label class="row small">Scan the last <input class="num" type="number" min="1" max="90" name="days" value="1" aria-label="Days"> day(s)</label>
+      <label class="check"><input type="checkbox" name="label" checked><span>Add <span class="mono">URLscanner/*</span> labels in Gmail</span></label>
+    </div>
+    <button class="lg" {% if job.running %}disabled{% endif %}>Scan now</button>
+  </form>
+  <div id="mail-job" data-running="{{ '1' if job.running else '' }}" data-url="{{ url_for('api_mail_job') }}">
+    {% if job.running %}<div class="note info"><span class="spinner"></span><div>Gmail {{ job.what }} running… results appear here when it finishes.</div></div>
+    {% elif job.error %}<div class="note danger"><div>{{ job.error }}</div></div>
+    {% elif job.message %}<div class="note good"><div>{{ job.message }}</div></div>{% endif %}
+  </div>
+  <p class="mut small" style="margin:12px 0 0">Links are judged without being opened{% if network == 'none' %}, with no network traffic at all{% else %} (DNS/WHOIS of the domain only){% endif %}.</p>
+</div>
+{% endif %}
+
+{% if stats.total %}
+<div class="grid four" style="margin-top:18px">
+  {% for v, ic in [('Dangerous', 'x-oct'), ('Suspicious', 'alert'), ('Low risk', 'info'), ('No signals found', 'check')] %}
+  <a class="tile t-{{ v | tone }} {{ 'on' if verdict == v }}" href="{{ url_for('mail_list', verdict='' if verdict == v else v, q=q or none) }}">
+    <div class="k"><span class="dot"></span>{{ v }}</div><div class="v">{{ bv.get(v, 0) }}</div></a>
+  {% endfor %}
+</div>
+<div class="card" style="margin-top:18px">
+  <div class="spread small" style="margin-bottom:10px"><b>{{ stats.total }} messages analysed</b>
+    <span class="mut">{{ stats.labelled }} labelled{% if stats.label_errors %} · {{ stats.label_errors }} label error(s){% endif %}{% if stats.last_scan %} · last scan {{ stats.last_scan | ts }}{% endif %}</span></div>
+  <div class="distribution">{% for v in ['Dangerous', 'Suspicious', 'Low risk', 'No signals found', 'Error'] %}{% if bv.get(v) %}<i class="t-{{ v | tone }}" style="width: {{ 100 * bv[v] / stats.total }}%" title="{{ v }}: {{ bv[v] }}"></i>{% endif %}{% endfor %}</div>
+</div>
+{% endif %}
+
+<div class="card flush" style="margin-top:18px">
+  <div class="card-head">
+    <h2>Messages {% if verdict %}{{ badge(verdict) }}{% endif %}</h2>
+    <form method="GET" class="row" style="flex:1;justify-content:flex-end">
+      {% if verdict %}<input type="hidden" name="verdict" value="{{ verdict }}">{% endif %}
+      <div class="search" style="min-width:min(100%, 300px)"><input type="search" name="q" value="{{ q }}" placeholder="Search sender or subject" aria-label="Search"></div>
+      {% if q or verdict %}<a class="btn ghost sm" href="{{ url_for('mail_list') }}">Clear</a>{% endif %}
+    </form>
+  </div>
+  {% if rows %}
+  <div class="table-wrap"><table class="hover" style="margin-top:14px">
+    <thead><tr><th>Message</th><th>Verdict</th><th class="hide-sm">Risk</th><th class="hide-sm">Label</th><th class="hide-sm">Received</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+    <tr>
+      <td><a class="row-link" href="{{ url_for('mail_detail', msgid=r.msgid) }}"><span class="cell-title">{{ r.subject or '(no subject)' }}</span>
+        <span class="cell-sub">{{ r.from_addr }}</span></a></td>
+      <td>{{ badge(r.verdict) }}{% if r.deep_scanned %} <span class="tag" title="Links were opened on request">opened</span>{% endif %}</td>
+      <td class="hide-sm">{{ riskbar(r.risk_score, r.verdict) }}</td>
+      <td class="hide-sm small">{% if r.label_error %}<span class="badge sq t-high" title="{{ r.label_error }}">label failed</span>
+        {% elif r.label_applied %}<span class="tag">{{ r.label_applied.split('/')[-1] }}</span>{% else %}<span class="mut">—</span>{% endif %}</td>
+      <td class="nowrap mut small hide-sm">{{ (r.received_at or r.scanned_at) | ts }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}
+  <div class="empty"><p>{{ 'No message matches.' if (q or verdict) else 'No e-mails scanned yet.' }}</p></div>
+  {% endif %}
+</div>
+{% endblock %}

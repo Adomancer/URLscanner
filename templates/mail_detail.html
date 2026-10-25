@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% from "_ui.html" import copy %}
+{% block title %}{{ row.subject or 'Mail' }} · URL Scanner{% endblock %}
+{% block head %}{% if job.running %}<noscript><meta http-equiv="refresh" content="5"></noscript>{% endif %}{% endblock %}
+{% block body %}
+<div class="crumbs"><a href="{{ url_for('mail_list') }}">All mail</a>
+  <span>· scanned {{ row.scanned_at | ts }}</span>
+  <span>· id <span class="mono">{{ row.msgid }}</span> {{ copy(row.msgid, 'Copy message id') }}</span></div>
+
+<div id="mail-job" data-running="{{ '1' if job.running else '' }}" data-url="{{ url_for('api_mail_job') }}">
+  {% if job.running %}<div class="note info" style="margin:0 0 18px"><span class="spinner"></span><div>Gmail {{ job.what }} running… this page reloads when it finishes.</div></div>
+  {% elif job.error %}<div class="note danger" style="margin:0 0 18px"><div>{{ job.error }}</div></div>
+  {% elif job.message %}<div class="note good" style="margin:0 0 18px"><div>{{ job.message }}</div></div>{% endif %}
+</div>
+{% if row.label_error %}<div class="note warn" style="margin:0 0 18px"><div>The Gmail label could not be applied: {{ row.label_error }}</div></div>{% endif %}
+
+{% include "_eml.html" %}
+
+{% set untrusted = (eml.links or []) | rejectattr('trusted') | list %}
+{% if configured and untrusted and not eml.error %}
+<div class="card" style="margin-top:18px">
+  <div class="card-head"><h2>Deep scan</h2><span class="mut small">optional · only when you ask</span></div>
+  <div class="note warn" style="margin-top:0"><div>This <b>opens the selected links from this computer</b>. The sites will see your IP address and the
+    full link, including any token in it, and a tracking link tells the sender you looked. A VPN hides your IP, nothing more.</div></div>
+  <form method="POST" action="{{ url_for('mail_deep', msgid=row.msgid) }}" style="margin-top:14px">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="spread small" style="margin-bottom:8px"><b>Links to open</b>
+      <span><button type="button" class="link-btn" data-check-all="link">all</button> · <button type="button" class="link-btn" data-check-none="link">none</button></span></div>
+    <div style="display:grid;gap:8px">
+      {% for l in untrusted %}
+      <label class="check"><input type="checkbox" name="link" value="{{ l.n }}" {% if not l.token_like %}checked{% endif %}>
+        <span><span class="mono">{{ l.n }}. {{ l.url | defang }}</span>{% if l.token_like %} <span class="badge sq t-info">one-time link?</span>{% endif %}</span></label>
+      {% endfor %}
+    </div>
+    <div class="opts" style="flex-direction:column;gap:10px">
+      <label class="check"><input type="checkbox" name="token_links"><span>Also open links that look like one-time links<small>password resets, magic logins, unsubscribe: opening them may use up the real token</small></span></label>
+      <label class="check"><input type="checkbox" name="understand" required><span>I understand these sites will see my IP address</span></label>
+    </div>
+    <div class="row" style="justify-content:flex-end;margin-top:14px">
+      <button class="danger" {% if job.running %}disabled{% endif %}>Open selected links and re-score</button>
+    </div>
+  </form>
+</div>
+{% endif %}
+<p class="footer-note">Same from the command line: <code>python cli.py gmail deep {{ row.msgid }} --url N</code></p>
+{% endblock %}

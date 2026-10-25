@@ -41,6 +41,16 @@ def brand_domains():
 
 
 @lru_cache(maxsize=None)
+def brand_sender_domains():
+    """registered domain -> brand name, for domains a brand legitimately sends e-mail from."""
+    out = dict(brand_domains())
+    for b in brands():
+        for d in b.get("sender_domains", []):
+            out[d.lower()] = b["brand"]
+    return out
+
+
+@lru_cache(maxsize=None)
 def confusables():
     return {k: v for k, v in json_file("confusables.json").items() if not k.startswith("_")}
 
@@ -48,6 +58,22 @@ def confusables():
 @lru_cache(maxsize=None)
 def lists():
     return json_file("lists.json")
+
+
+@lru_cache(maxsize=None)
+def freemail_domains():
+    return frozenset(lists().get("freemail_domains", []))
+
+
+def abused_platform(host):
+    """The platform entry if anyone can publish content under this host (Google Forms, OneDrive...)."""
+    host = (host or "").lower().rstrip(".")
+    return next((p for p in lists().get("abused_platforms", []) if host == p or host.endswith("." + p)), "")
+
+
+def mail_allowlist():
+    """Trusted senders (addresses or registered domains). Re-read on every call so edits apply at once."""
+    return frozenset(x.lower() for x in _read_lines(_path("mail_allowlist.txt")))
 
 
 @lru_cache(maxsize=None)

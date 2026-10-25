@@ -57,6 +57,23 @@ MAX_BODY_BYTES = int(os.getenv("SCANNER_MAX_BODY_BYTES", str(16 * 1024 * 1024)))
 MAX_REDIRECTS = int(os.getenv("SCANNER_MAX_REDIRECTS", "10"))
 SANDBOX_TIMEOUT = float(os.getenv("SCANNER_SANDBOX_TIMEOUT", "20"))
 
+# --- Gmail scanner (scanner.mail) ---
+# A Google *App Password* (Google account -> Security -> 2-Step Verification -> App passwords).
+# It grants full mailbox access over IMAP: keep it only in .env and revoke it when unused.
+GMAIL_ADDRESS = os.getenv("GMAIL_ADDRESS", "")
+GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")
+GMAIL_IMAP_HOST = os.getenv("GMAIL_IMAP_HOST", "imap.gmail.com")
+# What link analysis of e-mail may touch: "dns" = DNS + WHOIS lookups of the domain (never the site
+# itself); "none" = no network connection at all during analysis.
+MAIL_NETWORK = "none" if os.getenv("SCANNER_MAIL_NETWORK", "dns").lower() == "none" else "dns"
+try:  # bytes downloaded per Gmail run at most (Gmail rate-limits IMAP downloads)
+    MAIL_MAX_RUN_BYTES = int(os.getenv("SCANNER_MAIL_MAX_RUN_BYTES", str(200 * 1024 * 1024)))
+except ValueError:
+    MAIL_MAX_RUN_BYTES = 200 * 1024 * 1024
+# Host names the /mail pages answer to besides localhost (comma-separated). Pages that show your mail
+# check the Host header so a DNS-rebinding web page cannot read them through your browser.
+ALLOWED_HOSTS = {h.strip().lower() for h in os.getenv("SCANNER_ALLOWED_HOSTS", "").split(",") if h.strip()}
+
 USER_AGENT = os.getenv(
     "SCANNER_USER_AGENT",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "

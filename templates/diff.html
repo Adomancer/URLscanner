@@ -1,31 +1,30 @@
 {% extends "base.html" %}
+{% from "_ui.html" import sev %}
 {% block title %}Changes · URL Scanner{% endblock %}
 {% block body %}
-<p class="mono" style="margin:0">{{ url | defang }}</p>
+<div class="crumbs"><a href="{{ url_for('history') }}">History</a></div>
+<div class="page-head"><div><div class="eyebrow">Changes</div>
+  <h1 class="mono" style="font-size:18px">{{ url | defang }}</h1>
+  {% if d %}<p>{{ d.old_at }} → {{ d.new_at }}</p>{% endif %}</div></div>
 
 {% if not d %}
-  <p class="mut" style="margin-top:20px">
-    Two completed scans of this exact URL are needed to compare.{% if rows %} There is {{ rows | length }} so far.{% endif %}
-  </p>
-  <p><a href="{{ url_for('index') }}">Scan it again</a></p>
+  <div class="card empty">
+    <p>Two completed scans of this exact URL are needed to compare.{% if rows %} There is {{ rows | length }} so far.{% endif %}</p>
+    <a class="btn" href="{{ url_for('index') }}">Scan it again</a></div>
 {% else %}
-  <p class="mut" style="font-size:13px;margin-top:6px">{{ d.old_at }} → {{ d.new_at }}</p>
-
   {% if d.changed %}
-  <h2>Changed</h2>
-  <table class="list"><tbody>
-    {% for c in d.changed %}<tr><td>{{ c.field }}</td><td class="mono mut">{{ c.old }}</td><td class="mono">{{ c.new }}</td></tr>{% endfor %}
-  </tbody></table>
+  <div class="card flush"><div class="card-head"><h2>Changed</h2></div>
+    <div class="table-wrap"><table style="margin-top:12px"><thead><tr><th>Field</th><th>Before</th><th>Now</th></tr></thead><tbody>
+      {% for c in d.changed %}<tr><td>{{ c.field }}</td><td class="mono mut">{{ c.old }}</td><td class="mono">{{ c.new }}</td></tr>{% endfor %}
+    </tbody></table></div></div>
   {% endif %}
-
-  <h2>New findings</h2>
-  {% for f in d.added %}
-  <div class="finding"><span class="sev sev-{{ f.severity }}">{{ f.severity }}</span> {{ f.title }}</div>
-  {% else %}<p class="mut">None.</p>{% endfor %}
-
-  <h2>Resolved</h2>
-  {% for f in d.resolved %}
-  <div class="finding"><span class="sev sev-info">{{ f.severity }}</span> {{ f.title }}</div>
-  {% else %}<p class="mut">None.</p>{% endfor %}
+  <div class="grid two" style="margin-top:18px">
+    <div class="card"><h2>New findings</h2>
+      <div class="findings">{% for f in d.added %}<div class="finding t-{{ f.severity | tone }}"><div class="t">{{ sev(f.severity) }} {{ f.title }}</div></div>
+      {% else %}<p class="mut">None.</p>{% endfor %}</div></div>
+    <div class="card"><h2>Resolved</h2>
+      <div class="findings">{% for f in d.resolved %}<div class="finding t-ok"><div class="t">{{ sev(f.severity) }} {{ f.title }}</div></div>
+      {% else %}<p class="mut">None.</p>{% endfor %}</div></div>
+  </div>
 {% endif %}
 {% endblock %}

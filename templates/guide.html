@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% from "_ui.html" import badge %}
+{% block title %}Guide · URL Scanner{% endblock %}
+{% block body %}
+<div class="page-head"><div><div class="eyebrow">Guide</div><h1>How the scanner works</h1>
+  <p>What it checks, what the verdicts mean, and exactly what does (and does not) leave your machine.</p></div></div>
+
+<div class="grid side-r" style="grid-template-columns:minmax(0,1fr) 240px">
+  <div class="stack prose">
+    <section class="card" id="start">
+      <h2>Quick start</h2>
+      <ol class="steps">
+        <li><div><b>Scan a link</b>: paste it on the <a href="{{ url_for('index') }}">Scan</a> page. Defanged forms such as <code>hxxps://evil[.]com</code> work.</div></li>
+        <li><div><b>Check an e-mail</b>: in Gmail open the message, choose <i>⋮ → Download message</i>, and drop the <code>.eml</code> file on the Scan page.</div></li>
+        <li><div><b>Watch your whole inbox</b>: connect Gmail (see <a href="#gmail">below</a>) and use the Mail page or <code>python cli.py gmail watch</code>.</div></li>
+      </ol>
+    </section>
+
+    <section class="card" id="verdicts">
+      <h2>Reading the verdicts</h2>
+      <p><b>Threat risk (0–100)</b> answers “is this phishing or malware?”. Every finding carries a weight and they
+        combine like independent probabilities: <code>risk = 1 − Π(1 − weight)</code>. Two medium signals therefore
+        add up to more than either alone, but never past 100.</p>
+      <div class="table-wrap"><table style="margin:6px 0 16px"><thead><tr><th>Links</th><th>Score</th><th>E-mails</th><th>Score</th></tr></thead><tbody>
+        <tr><td>{{ badge('Malicious') }}</td><td>80+</td><td>{{ badge('Dangerous') }}</td><td>70+</td></tr>
+        <tr><td>{{ badge('Likely malicious') }}</td><td>50–79</td><td>{{ badge('Suspicious') }}</td><td>35–69</td></tr>
+        <tr><td>{{ badge('Suspicious') }}</td><td>20–49</td><td>{{ badge('Low risk') }}</td><td>10–34</td></tr>
+        <tr><td>{{ badge('Clean') }} / {{ badge('Unverified') }}</td><td>0–19</td><td>{{ badge('No signals found') }}</td><td>0–9</td></tr>
+      </tbody></table></div>
+      <p><b>Unverified</b> means the link was analysed without contacting the site (as for every link in an e-mail):
+        nothing bad was found, but nothing was proven either. <b>Security grade (A+–F)</b> is separate: how well a site is
+        hardened (TLS, headers, DNS). A phishing page can have an A, and a good bank site can have a C.</p>
+      <div class="note info"><div>A score is evidence, not a guarantee. Open the findings to see why; a real
+        bank will never ask for your OTP, PIN or password by e-mail, whatever the score says.</div></div>
+    </section>
+
+    <section class="card" id="privacy">
+      <h2>Privacy</h2>
+      <ul>
+        <li>No third-party scanning service (VirusTotal, urlscan, …) and no API key, ever.</li>
+        <li>A normal URL scan contacts the <b>site itself</b> plus DNS (port 53) and WHOIS (port 43).</li>
+        <li>Every address, including each redirect hop, must be public: internal networks and cloud metadata are refused.</li>
+        <li>Links found in e-mail are <b>never opened</b> unless you ask for a deep scan of one message.</li>
+      </ul>
+      <div class="table-wrap"><table style="margin-top:10px"><thead><tr><th>E-mail mode</th><th>Opens the links?</th><th>Other traffic</th></tr></thead><tbody>
+        <tr><td><code>SCANNER_MAIL_NETWORK=dns</code>{% if network == 'dns' %} <span class="tag">current</span>{% endif %}</td><td>no</td><td>DNS + WHOIS of the <i>registered domain</i> only</td></tr>
+        <tr><td><code>SCANNER_MAIL_NETWORK=none</code>{% if network == 'none' %} <span class="tag">current</span>{% endif %}</td><td>no</td><td>none at all</td></tr>
+        <tr><td>Deep scan (one message, on request)</td><td><b>yes</b>, the links you pick</td><td>the site sees your IP and the full link</td></tr>
+      </tbody></table></div>
+      <p class="mut small" style="margin-top:10px">Why only the registered domain? A link like <code>a1b2c3.track.example</code> is unique per recipient; looking it up would tell the sender's nameserver that you read the mail.</p>
+    </section>
+
+    <section class="card" id="gmail">
+      <h2>Gmail scanner</h2>
+      <ol class="steps">
+        <li><div>Turn on <b>2-Step Verification</b> for your Google account.</div></li>
+        <li><div>Create an <b>App Password</b> at <code>myaccount.google.com/apppasswords</code> (name it “URL Scanner”).</div></li>
+        <li><div>Put it in <code>.env</code> next to <code>cli.py</code>:<pre class="code" style="margin-top:8px">GMAIL_ADDRESS=you@gmail.com
+GMAIL_APP_PASSWORD=abcd efgh ijkl mnop
+SCANNER_ACCESS_TOKEN=pick-a-long-random-string</pre></div></li>
+        <li><div>Run <code>python cli.py gmail test</code>, then a read-only first pass: <code>python cli.py gmail scan --days 3 --no-label</code>.</div></li>
+      </ol>
+      <h3 style="margin-top:18px">What it does to your mailbox</h3>
+      <ul>
+        <li>Reads with <code>BODY.PEEK[]</code> from a folder opened read-only: messages stay <b>unread</b>, nothing is moved or deleted.</li>
+        <li>Optionally adds <code>URLscanner/Suspicious</code> or <code>URLscanner/Dangerous</code> labels (separate connection, only its own labels; <code>--no-label</code> turns it off).</li>
+        <li>Stores a redacted summary only: no message bodies, and every URL has its query string and token-like parts masked.</li>
+      </ul>
+      <div class="note warn"><div>An App Password gives <b>full</b> access to the mailbox. Keep it only in <code>.env</code>, never commit it, and revoke it on the same Google page when you stop using the scanner.</div></div>
+      <h3 style="margin-top:18px">Trusted senders</h3>
+      <p>Add addresses or domains to <code>scanner/data/mail_allowlist.txt</code> to never label them. It only applies when Gmail reports DMARC <b>pass</b> for a matching From domain, so a forged sender cannot use it.</p>
+    </section>
+
+    <section class="card" id="cli">
+      <h2>Command line</h2>
+      <pre class="code">python cli.py scan example.com --format html,sarif   # one URL (or a .txt of URLs)
+python cli.py extract message.eml --scan            # score an e-mail file
+python cli.py gmail scan --days 7                   # analyse + label recent mail
+python cli.py gmail scan --folder spam --no-label --all
+python cli.py gmail list -v                         # what was scanned
+python cli.py gmail deep &lt;id&gt; --url 2              # open one message's link #2
+python cli.py gmail watch --interval 300            # keep checking; Windows toast
+python cli.py gmail eval outputs/labeled            # precision / recall on your mail
+python tools/update_feeds.py                        # refresh offline threat feeds</pre>
+    </section>
+
+    <section class="card" id="feeds">
+      <h2>Threat feeds</h2>
+      <p><code>python tools/update_feeds.py</code> downloads the OpenPhish community feed and, with a free
+        <code>ABUSECH_AUTH_KEY</code>, URLhaus. These are bulk downloads compared locally: no scanned URL is ever sent to them.
+        You can also drop your own lists (URLs, domains, IPs, hosts-file format) into <code>scanner/data/blocklists/</code>.</p>
+    </section>
+
+    <section class="card" id="faq">
+      <h2>FAQ</h2>
+      <p><b>A real newsletter was flagged.</b> Open it and read the findings; a sender in the allowlist is never labelled.
+        Measure your own false-positive rate with <code>gmail eval</code>.</p>
+      <p><b>Why are some links “Not analysed”?</b> Each message has a 60-second budget and at most 30 links, so one hostile e-mail cannot stall the scanner.</p>
+      <p><b>The Mail page says 403.</b> It shows your mail, so it needs <code>SCANNER_ACCESS_TOKEN</code> and only answers on
+        <code>localhost</code> (add other host names to <code>SCANNER_ALLOWED_HOSTS</code>).</p>
+      <p style="margin:0"><b>Gmail login fails.</b> Use an App Password (not your normal password) created for the same account as <code>GMAIL_ADDRESS</code>. Work or school accounts may have IMAP or App Passwords turned off by their administrator.</p>
+    </section>
+  </div>
+  <nav class="toc card" aria-label="On this page" style="padding:12px">
+    <a href="#start">Quick start</a><a href="#verdicts">Reading the verdicts</a><a href="#privacy">Privacy</a>
+    <a href="#gmail">Gmail scanner</a><a href="#cli">Command line</a><a href="#feeds">Threat feeds</a><a href="#faq">FAQ</a>
+  </nav>
+</div>
+{% endblock %}

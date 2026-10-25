@@ -11,6 +11,7 @@ def client(monkeypatch):
     monkeypatch.setattr(config, "ACCESS_TOKEN", "")
     monkeypatch.setattr(config, "WEB_ACTIVE", False)
     monkeypatch.setattr(config, "TRUST_PROXY", False)
+    monkeypatch.setattr(config, "MAIL_NETWORK", "none")
     monkeypatch.setattr(webapp, "scan_url", lambda *a, **k: None)  # never touch the network from tests
     webapp._rate.clear()
     c = webapp.app.test_client()

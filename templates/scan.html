@@ -1,47 +1,94 @@
 {% extends "base.html" %}
+{% from "_ui.html" import badge, riskbar %}
 {% block body %}
+<div class="col">
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Scan</div>
+    <h1>Check a link, an e-mail or a QR code</h1>
+    <p>Analysed on this machine. Nothing is uploaded to a scanning service.</p>
+  </div>
+</div>
+
 <form method="POST" action="{{ url_for('scan_submit') }}" enctype="multipart/form-data" id="scan-form">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="mode" id="mode" value="single">
 
-  <div class="row">
-    <input type="text" name="url" data-panel="single" placeholder="example.com"
-           autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="URL" autofocus>
-    <button type="submit" id="scan-btn">Scan</button>
+  <div class="seg" role="tablist" aria-label="Input type" style="margin-bottom:12px">
+    <button type="button" class="on" data-mode="single" role="tab">URL</button>
+    <button type="button" data-mode="bulk" role="tab">List</button>
+    <button type="button" data-mode="file" role="tab">E-mail / QR / file</button>
   </div>
 
-  <div class="modes">
-    <button type="button" class="on" data-mode="single">URL</button>
-    <button type="button" data-mode="bulk">List</button>
-    <button type="button" data-mode="file">Email, QR or file</button>
+  <div data-panel="single">
+    <div class="search xl">
+      <span class="prompt" aria-hidden="true">&gt;</span>
+      <input type="text" name="url" placeholder="example.com/login" autocomplete="off" autocapitalize="off"
+             spellcheck="false" aria-label="URL" autofocus>
+      <button type="submit" class="lg scan-btn">Scan</button>
+    </div>
   </div>
 
-  <div data-panel="bulk" class="hidden" style="margin-top:12px">
-    <textarea name="urls" placeholder="One URL per line, up to 50" aria-label="URL list"></textarea>
+  <div data-panel="bulk" class="hidden">
+    <label class="field"><span>One URL per line, up to 50. Defanged forms such as hxxp://evil[.]com work too.</span>
+      <textarea name="urls" placeholder="https://first.example&#10;second.example/path" aria-label="URL list"></textarea></label>
+    <div class="row" style="margin-top:12px"><button type="submit" class="scan-btn">Scan all</button></div>
   </div>
-  <div data-panel="file" class="hidden" style="margin-top:12px">
-    <input type="file" name="file" accept=".eml,.txt,.png,.jpg,.jpeg,.bmp,.gif,.webp" aria-label="File">
-    <p class="mut" style="font-size:13px;margin:8px 0 0">
-      An .eml file has every link checked. An image is read for a QR code. A .txt file is searched for URLs.
-    </p>
+
+  <div data-panel="file" class="hidden">
+    <label class="dropzone" id="dropzone">
+      <b>Drop a file here, or click to choose</b>
+      <span class="small">.eml e-mail · QR-code image · .txt containing URLs · max 8 MB</span>
+      <span class="chosen" id="chosen"></span>
+      <input type="file" name="file" accept=".eml,.txt,.png,.jpg,.jpeg,.bmp,.gif,.webp" aria-label="File">
+    </label>
+    <div class="note info"><div>An .eml is scored as a whole: sender, wording, links and attachments. Its links are
+      analysed <b>without being opened</b>, so the sender never learns you looked.</div></div>
+    <div class="row" style="margin-top:12px"><button type="submit" class="scan-btn">Analyse file</button></div>
   </div>
 
   <fieldset class="opts">
-    <label><input type="checkbox" name="browser" value="1" {{ 'disabled' if not sandbox_available() }}>
-      Browser sandbox{% if not sandbox_available() %} (not installed){% endif %}</label>
+    <label class="check"><input type="checkbox" name="browser" value="1" {{ 'disabled' if not sandbox_available() }}>
+      <span>Browser sandbox<small>{{ 'Screenshot, JS redirects, visual brand match' if sandbox_available() else 'Not installed (requirements-browser.txt)' }}</small></span></label>
     {% if active_allowed() %}
-    <label><input type="checkbox" name="active" value="1" id="opt-active"> Port scan</label>
+    <label class="check"><input type="checkbox" name="active" value="1" id="opt-active">
+      <span>Port scan<small>Only for systems you may test</small></span></label>
     {% endif %}
   </fieldset>
   {% if active_allowed() %}
   <div class="note warn hidden" id="auth-row">
-    <label><input type="checkbox" name="authorized" value="1" id="opt-auth">
-      I am authorised to test this target</label>
+    <label class="check"><input type="checkbox" name="authorized" value="1" id="opt-auth">
+      <span>I am authorised to actively test this target</span></label>
   </div>
   {% endif %}
 </form>
 
-<p class="mut" style="font-size:13px;margin-top:40px">
-  Analysis runs on this machine. The URL is not sent to any third party.
-</p>
+<div class="facts" style="margin-top:40px">
+  <div><h3>Private</h3><p>No VirusTotal, no API keys. Only the site itself and DNS/WHOIS are contacted.</p></div>
+  <div><h3>Two verdicts</h3><p>A threat score and a security grade, each point backed by evidence.</p></div>
+  <div><h3>E-mail aware</h3><p>Spoofed senders, scam wording, look-alike links, risky attachments, QR codes.</p></div>
+</div>
+
+{% if recent %}
+{% set total = stats.values() | sum %}
+{% set flagged = stats.get('Malicious', 0) + stats.get('Likely malicious', 0) + stats.get('Suspicious', 0) %}
+<div class="card flush" style="margin-top:16px">
+  <div class="card-head"><h2>Recent scans <span class="mut small" style="font-weight:400">{{ total }} completed · {{ flagged }} flagged</span></h2>
+    <a href="{{ url_for('history') }}" class="small">All history</a></div>
+  <div class="table-wrap"><table class="hover" style="margin-top:12px">
+    <thead><tr><th>Target</th><th>Verdict</th><th class="hide-sm">Risk</th><th class="hide-sm">When</th></tr></thead>
+    <tbody>
+    {% for row in recent %}
+    <tr>
+      <td><a class="row-link" href="{{ url_for('scan_result', scan_id=row.id) }}"><span class="cell-title mono">{{ row.url | defang }}</span></a></td>
+      <td>{% if row.verdict %}{{ badge(row.verdict) }}{% else %}<span class="mut">{{ row.status }}</span>{% endif %}</td>
+      <td class="hide-sm">{{ riskbar(row.risk_score, row.verdict) }}</td>
+      <td class="nowrap mut small hide-sm">{{ row.created_at | ts }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endif %}
+</div>
 {% endblock %}

@@ -58,7 +58,7 @@ def _load():
         return _cache
 
 
-@check("blocklist", "Offline threat feeds", stage=2)
+@check("blocklist", "Offline threat feeds", stage=2, passive=True)
 def run(ctx):
     s = Section()
     db = _load()

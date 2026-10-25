@@ -7,7 +7,7 @@
 
 {% set fl = S.file %}
 {% if fl and fl.show %}
-<h2>File</h2>
+<details class="panel"><summary>File</summary><div class="body">
 {{ kv([
   ('Name', fl.name),
   ('Type', fl.type ~ (' · ' ~ fl.content_type if fl.content_type else '')),
@@ -41,11 +41,12 @@
   ('Double extensions', fl.archive.double_extensions | join(', '))
 ]) }}
 {% endif %}
+</div></details>
 {% endif %}
 
 {% set tls = S.tls %}
 {% if tls and tls.applicable %}
-<h2>TLS</h2>
+<details class="panel"><summary>TLS</summary><div class="body">
 {{ kv([
   ('Subject', tls.subject),
   ('Issuer', tls.issuer ~ (' · ' ~ tls.issuer_org if tls.issuer_org else '')),
@@ -68,11 +69,12 @@
   {% endfor %}
 </tbody></table>
 {% endif %}
+</div></details>
 {% endif %}
 
 {% set dns = S.dns %}
 {% if dns and dns.records %}
-<h2>DNS</h2>
+<details class="panel"><summary>DNS</summary><div class="body">
 {{ kv([
   ('A', dns.records.A | join(', ')),
   ('AAAA', dns.records.AAAA | join(', ')),
@@ -84,22 +86,24 @@
   ('DMARC', dns.dmarc[0] if dns.dmarc else ''),
   ('DNSSEC', 'signed' if dns.dnssec else '')
 ]) }}
+</div></details>
 {% endif %}
 
 {% set who = S.whois %}
 {% if who and who.created %}
-<h2>Registration</h2>
+<details class="panel"><summary>Registration</summary><div class="body">
 {{ kv([
   ('Registered', who.created ~ (' (' ~ who.age_days ~ ' days ago)' if who.age_days is not none else '')),
   ('Expires', who.expires),
   ('Registrar', who.registrar),
   ('Privacy', 'redacted' if who.privacy else '')
 ]) }}
+</div></details>
 {% endif %}
 
 {% set hd = S.headers %}
 {% if hd and hd.rows %}
-<h2>Headers</h2>
+<details class="panel"><summary>Headers</summary><div class="body">
 <table class="list"><tbody>
   {% for row in hd.rows %}
   <tr>
@@ -113,19 +117,21 @@
 {% if hd.cookies %}
 <p class="mut" style="font-size:13px;margin-top:10px">Cookies: {% for c in hd.cookies %}{{ c.name }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
 {% endif %}
+</div></details>
 {% endif %}
 
 {% set rd = S.redirects %}
 {% if rd and rd.chain and rd.chain | length > 1 %}
-<h2>Redirects</h2>
+<details class="panel"><summary>Redirects</summary><div class="body">
 <table class="list"><tbody>
   {% for hop in rd.chain %}<tr><td>{{ hop.status }}</td><td class="mono">{{ hop.url | defang }}</td></tr>{% endfor %}
 </tbody></table>
+</div></details>
 {% endif %}
 
 {% set wk = S.wellknown %}
 {% if wk and (wk.security_txt or wk.robots) %}
-<h2>security.txt &amp; robots.txt</h2>
+<details class="panel"><summary>security.txt &amp; robots.txt</summary><div class="body">
 {{ kv([
   ('security.txt', wk.security_txt.url if wk.security_txt else 'not published'),
   ('Contact', wk.security_txt.contact | join(', ') if wk.security_txt else ''),
@@ -136,11 +142,12 @@
   ('Sensitive-looking', wk.robots.sensitive | join(', ') if wk.robots else ''),
   ('Sitemaps', wk.robots.sitemaps | join(', ') if wk.robots else '')
 ]) }}
+</div></details>
 {% endif %}
 
 {% set osint = S.osint %}
 {% if osint and (osint.tracking_ids or osint.wallets or osint.emails or osint.social or (osint.favicon and osint.favicon.mmh3)) %}
-<h2>OSINT</h2>
+<details class="panel"><summary>OSINT</summary><div class="body">
 {{ kv([
   ('Favicon hash', (osint.favicon.mmh3 ~ '  ' ~ osint.favicon.shodan_query) if osint.favicon and osint.favicon.mmh3 else ''),
   ('Tracking IDs', osint.tracking_ids | map(attribute='id') | join(', ')),
@@ -148,32 +155,35 @@
   ('Emails', osint.emails | join(', ')),
   ('Social', osint.social | map(attribute='url') | join(', '))
 ]) }}
+</div></details>
 {% endif %}
 
 {% set tech = S.tech %}
 {% if tech and tech.technologies %}
-<h2>Technology</h2>
+<details class="panel"><summary>Technology</summary><div class="body">
 <div class="chips">
   {% for t in tech.technologies %}
   <span class="chip">{{ t.name }}{% if t.version %} {{ t.version }}{% endif %}{% if t.eol %} · outdated{% endif %}</span>
   {% endfor %}
 </div>
+</div></details>
 {% endif %}
 
 {% set ports = S.ports %}
 {% if ports %}
-<h2>Ports</h2>
+<details class="panel"><summary>Ports</summary><div class="body">
 <p class="mut" style="font-size:13px">{{ ports.open | length }} open of {{ ports.scanned | length }} tested on {{ ports.ip }}</p>
 {% if ports.open %}
 <table class="list"><tbody>
   {% for o in ports.open %}<tr><td class="mono">{{ o.port }}</td><td>{{ o.service }}</td><td class="mono mut">{{ o.banner }}</td></tr>{% endfor %}
 </tbody></table>
 {% endif %}
+</div></details>
 {% endif %}
 
 {% set sb = S.sandbox %}
 {% if sb %}
-<h2>Browser</h2>
+<details class="panel"><summary>Browser</summary><div class="body">
 {% if sb.skipped %}
 <p class="mut">{{ sb.skipped }}</p>
 {% else %}
@@ -186,4 +196,5 @@
     ('Blocked (internal)', sb.blocked | join(', '))
   ]) }}
 {% endif %}
+</div></details>
 {% endif %}

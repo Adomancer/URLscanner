@@ -81,15 +81,22 @@ def _error_result(scan_id, raw, url, message, options):
 
 
 def scan_url(raw_url, *, active=False, browser=False, authorized=False, scan_id=None, progress=None,
-             store=True, batch_id=None):
+             store=True, batch_id=None, passive=False, network="dns"):
     """Run a full scan and return a JSON-serialisable dict.
 
     active   -- run active checks (port scan); only honoured together with authorized=True
     browser  -- run the headless-browser sandbox (needs Playwright)
     progress -- optional callback(dict) receiving per-check status updates
+    passive  -- never contact the target host: only checks marked passive run, DNS is asked about the
+                registered domain only, and a quiet result is "Unverified" rather than "Clean"
+    network  -- with passive: "dns" also allows DNS and WHOIS; "none" makes no connection at all
+                (WHOIS answers come from the local cache only)
     """
     scan_id = scan_id or new_scan_id()
-    options = {"active": bool(active and authorized), "browser": bool(browser), "scan_id": scan_id}
+    options = {"active": bool(active and authorized) and not passive, "browser": bool(browser) and not passive,
+               "scan_id": scan_id}
+    if passive:
+        options.update(passive=True, network="none" if network == "none" else "dns")
     started = time.monotonic()
     started_at = dt.datetime.now(dt.timezone.utc).isoformat()
 
@@ -102,18 +109,21 @@ def scan_url(raw_url, *, active=False, browser=False, authorized=False, scan_id=
         return result
 
     ctx = ScanContext(url, options)
-    try:
-        ctx.ips = net.resolve_public(ctx.host, ctx.port)
-    except net.BlockedTarget as e:
-        result = _error_result(scan_id, raw_url, url, str(e), options)
-        result["host"] = ctx.host
-        if store:
-            storage.save_result(scan_id, result)
-        return result
-    except net.ResolveError as e:
-        ctx.resolve_error = str(e)
+    if not passive:
+        try:
+            ctx.ips = net.resolve_public(ctx.host, ctx.port)
+        except net.BlockedTarget as e:
+            result = _error_result(scan_id, raw_url, url, str(e), options)
+            result["host"] = ctx.host
+            if store:
+                storage.save_result(scan_id, result)
+            return result
+        except net.ResolveError as e:
+            ctx.resolve_error = str(e)
 
     checks = [c for c in load_all() if (not c.active or options["active"]) and (not c.browser or options["browser"])]
+    if passive:
+        checks = [c for c in checks if c.passive and not (options["network"] == "none" and c.name == "dns")]
     state = {c.name: {"title": c.title, "status": "queued"} for c in checks}
 
     def report(name, **kw):
@@ -162,7 +172,7 @@ def scan_url(raw_url, *, active=False, browser=False, authorized=False, scan_id=
                                 weight=0.1, evidence=ctx.resolve_error, category="dns"))
     findings.extend(correlate(findings, ctx.sections))
     findings = _dedupe(findings)
-    verdict = score(findings, trusted=ctx.trusted, fetched=ctx.fetch is not None)
+    verdict = score(findings, trusted=ctx.trusted, fetched=ctx.fetch is not None, passive=passive)
     detections = consensus(state, findings, ctx.sections)
 
     sev_rank = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
