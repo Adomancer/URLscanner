@@ -1,15 +1,39 @@
-# 🔍 OSINT URL Scanner
+# OSINT URL Scanner
+
+**Check whether a link or an e-mail is a phishing attempt without sending it to anyone.**
 
 A self-hosted URL threat and security scanner that runs **100% locally — no third-party APIs, no
 accounts, no API keys.** You give it a URL (or an email, a QR code, or a list) and it returns two
 independent verdicts, with every point of the score traced back to concrete evidence and a fix.
+It can also scan your Gmail inbox read-only and label the risky messages.
 
 ![Offline](https://img.shields.io/badge/APIs-none%20required-35c892)
 ![Python](https://img.shields.io/badge/Python-3.9%2B-4f8fe0)
 ![License](https://img.shields.io/badge/license-MIT-7c6cf0)
 
+![Result page](docs/screenshots/result.png)
+
 > For authorized security research, incident response and education only. Active checks require you
 > to confirm you are authorized to probe the target.
+
+## Quick start
+
+```bash
+git clone https://github.com/Adomancer/URLscanner.git
+cd URLscanner
+pip install -r requirements.txt
+
+python webapp.py                     # web UI at http://127.0.0.1:5000
+python cli.py scan https://example.com
+```
+
+No `.env`, account or API key is needed. Prefer Docker? See [Docker](#docker).
+
+**Contents:** [Why it's different](#why-its-different) ·
+[What it checks](#what-it-checks) · [Configuration](#configuration) · [CLI](#cli) ·
+[Privacy & safety](#how-privacy--safety-are-handled) · [Offline blocklists](#offline-blocklists) ·
+[Gmail inbox scanner](#gmail-inbox-scanner) · [Documentation](#documentation) ·
+[Project layout](#project-layout) · [Docker](#docker)
 
 ---
 
@@ -85,21 +109,9 @@ for data. It works on a phone and loads nothing from the internet: no CDN, no we
 
 ---
 
-## Install & run
+## Configuration
 
-```bash
-git clone https://github.com/Adomancer/URLscanner.git
-cd URLscanner
-pip install -r requirements.txt
-
-# Web UI
-python webapp.py                 # http://127.0.0.1:5000
-
-# Command line
-python cli.py scan https://example.com
-```
-
-No `.env` or API keys are required. Optional settings go in a `.env` file; copy
+Installation is covered in [Quick start](#quick-start). Optional settings go in a `.env` file; copy
 [`.env.example`](.env.example), which documents every one. The most useful ones:
 
 | Setting | Default | What it does |
@@ -200,7 +212,10 @@ python cli.py gmail eval outputs/labeled       # precision / recall on your own 
 Setup, scoring details, deep scan, watch mode and troubleshooting: **[docs/GMAIL.md](docs/GMAIL.md)**.
 Dalam Bahasa Indonesia: **[docs/PANDUAN.md](docs/PANDUAN.md)**.
 
----|---|---|
+**Privacy levels.** What each mode lets out of your machine:
+
+| Mode | Opens links? | Other traffic during analysis |
+|---|---|---|
 | default (`SCANNER_MAIL_NETWORK=dns`) | no | DNS + WHOIS for registered domains (your resolver and the registry see the *domain*, never the URL) |
 | `SCANNER_MAIL_NETWORK=none` / `--network none` | no | none at all (WHOIS only from the local cache) |
 | `gmail deep` (explicit, per message) | **yes**, the links you pick | as a normal scan; the site sees your IP and the full link |
@@ -233,6 +248,9 @@ by hand; measure them on your own mail with `gmail eval` (put exported `.eml` fi
 ## Project layout
 
 ```
+webapp.py          web UI and JSON API (Flask)
+cli.py             command line
+config.py          settings read from .env
 scanner/
   core.py          orchestrator (normalize → run checks in parallel → score → store)
   net.py           SSRF-safe fetching & resolution
